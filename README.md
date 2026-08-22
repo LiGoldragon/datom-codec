@@ -18,6 +18,12 @@ only context-sensitive typed realization and textual projection.
   Construct it only through `PathLock::try_new` with
   `PathLockConstructing` in scope; `PathLockViewing` exposes its three
   validated values read-only.
+- `PathLockRegistered` textualizes as
+  `PathLockRegistered.{PathLock.{name [paths] description}}`.
+  `PathLockRegistrationRejected` textualizes as
+  `PathLockRegistrationRejected.{PathLock.{name [paths] description} reason}`.
+  Its closed reasons are `DuplicateActiveName.{holder}` and
+  `PathOverlap.{path holder}`; the latter carries a normalized absolute path.
 - `ReportText`, `InterimNoteText`, and `PathLockText` are concrete typed
   textual carriers. They implement Protos `Realize`; their matching real types
   implement Protos `Textualize`.

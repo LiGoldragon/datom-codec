@@ -89,6 +89,37 @@ pub struct PathLock {
     description: String,
 }
 
+/// One normalized absolute path named by a path-lock rejection.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PathLockPath {
+    value: String,
+}
+
+/// The closed reasons that can reject a path-lock registration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PathLockRegistrationRejection {
+    DuplicateActiveName {
+        holder: PathLock,
+    },
+    PathOverlap {
+        path: PathLockPath,
+        holder: PathLock,
+    },
+}
+
+/// A successful path-lock registration reply.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PathLockRegistered {
+    lock: PathLock,
+}
+
+/// A rejected path-lock registration reply.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PathLockRegistrationRejected {
+    requested: PathLock,
+    reason: PathLockRegistrationRejection,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReportText {
     pub source: SourceText,
@@ -102,6 +133,18 @@ pub struct InterimNoteText {
 /// Textual source for one native path-lock registration.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PathLockText {
+    pub source: SourceText,
+}
+
+/// Textual source for one successful path-lock registration reply.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PathLockRegisteredText {
+    pub source: SourceText,
+}
+
+/// Textual source for one rejected path-lock registration reply.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PathLockRegistrationRejectedText {
     pub source: SourceText,
 }
 
@@ -170,6 +213,37 @@ pub trait PathLockViewing {
     fn description(&self) -> &str;
 }
 
+/// Checked construction for a normalized conflicting path.
+pub trait PathLockPathConstructing: Sized {
+    fn try_new(value: String) -> Result<Self, DatomFault>;
+}
+
+/// Read-only access to a normalized conflicting path.
+pub trait PathLockPathViewing {
+    fn path(&self) -> &str;
+}
+
+/// Construction for a successful path-lock registration reply.
+pub trait PathLockRegisteredConstructing: Sized {
+    fn new(lock: PathLock) -> Self;
+}
+
+/// Read-only access to a successful path-lock registration reply.
+pub trait PathLockRegisteredViewing {
+    fn lock(&self) -> &PathLock;
+}
+
+/// Construction for a rejected path-lock registration reply.
+pub trait PathLockRegistrationRejectedConstructing: Sized {
+    fn new(requested: PathLock, reason: PathLockRegistrationRejection) -> Self;
+}
+
+/// Read-only access to a rejected path-lock registration reply.
+pub trait PathLockRegistrationRejectedViewing {
+    fn requested(&self) -> &PathLock;
+    fn reason(&self) -> &PathLockRegistrationRejection;
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct OptionalText {
     value: Option<Text>,
@@ -233,6 +307,22 @@ pub enum TagListSelection {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PathLockSelection {
     Payload,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PathLockRegisteredSelection {
+    Payload,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PathLockRegistrationRejectedSelection {
+    Payload,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PathLockRegistrationRejectionSelection {
+    DuplicateActiveName,
+    PathOverlap,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -473,6 +563,48 @@ impl PathLockViewing for PathLock {
     }
 }
 
+impl PathLockPathConstructing for PathLockPath {
+    fn try_new(value: String) -> Result<Self, DatomFault> {
+        Ok(Self {
+            value: value.normalized_path()?,
+        })
+    }
+}
+
+impl PathLockPathViewing for PathLockPath {
+    fn path(&self) -> &str {
+        &self.value
+    }
+}
+
+impl PathLockRegisteredConstructing for PathLockRegistered {
+    fn new(lock: PathLock) -> Self {
+        Self { lock }
+    }
+}
+
+impl PathLockRegisteredViewing for PathLockRegistered {
+    fn lock(&self) -> &PathLock {
+        &self.lock
+    }
+}
+
+impl PathLockRegistrationRejectedConstructing for PathLockRegistrationRejected {
+    fn new(requested: PathLock, reason: PathLockRegistrationRejection) -> Self {
+        Self { requested, reason }
+    }
+}
+
+impl PathLockRegistrationRejectedViewing for PathLockRegistrationRejected {
+    fn requested(&self) -> &PathLock {
+        &self.requested
+    }
+
+    fn reason(&self) -> &PathLockRegistrationRejection {
+        &self.reason
+    }
+}
+
 trait ParenthesisProjecting {
     fn parenthesized_body(&self) -> String;
 }
@@ -694,6 +826,52 @@ impl ShapeDefined for PathLock {
     fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
         (shape == Shape::DottedBraced && head == Some(&Head("PathLock".into())))
             .then_some(PathLockSelection::Payload)
+    }
+}
+
+impl ShapeDefined for PathLockRegistered {
+    type Selection = PathLockRegisteredSelection;
+
+    fn shapes() -> &'static [Shape] {
+        &[Shape::DottedBraced]
+    }
+
+    fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
+        (shape == Shape::DottedBraced && head == Some(&Head("PathLockRegistered".into())))
+            .then_some(PathLockRegisteredSelection::Payload)
+    }
+}
+
+impl ShapeDefined for PathLockRegistrationRejected {
+    type Selection = PathLockRegistrationRejectedSelection;
+
+    fn shapes() -> &'static [Shape] {
+        &[Shape::DottedBraced]
+    }
+
+    fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
+        (shape == Shape::DottedBraced && head == Some(&Head("PathLockRegistrationRejected".into())))
+            .then_some(PathLockRegistrationRejectedSelection::Payload)
+    }
+}
+
+impl ShapeDefined for PathLockRegistrationRejection {
+    type Selection = PathLockRegistrationRejectionSelection;
+
+    fn shapes() -> &'static [Shape] {
+        &[Shape::DottedBraced]
+    }
+
+    fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
+        match (shape, head) {
+            (Shape::DottedBraced, Some(value)) if value == &Head("DuplicateActiveName".into()) => {
+                Some(PathLockRegistrationRejectionSelection::DuplicateActiveName)
+            }
+            (Shape::DottedBraced, Some(value)) if value == &Head("PathOverlap".into()) => {
+                Some(PathLockRegistrationRejectionSelection::PathOverlap)
+            }
+            _ => None,
+        }
     }
 }
 
@@ -1386,6 +1564,172 @@ impl DatomTextualizing for PathLock {
     }
 }
 
+impl DatomRealizing for PathLockRegistrationRejection {
+    fn realize_block(scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
+        match Self::select(block.shape, block.head()).ok_or(DatomFault {
+            problem: DatomProblem::Shape,
+        })? {
+            PathLockRegistrationRejectionSelection::DuplicateActiveName => {
+                let mut position = RecordPosition { ordinal: 0 };
+                let mut holder = None;
+                scope.realize_body(&mut |child_scope, child| {
+                    match position.next() {
+                        0 => holder = Some(PathLock::realize_block(child_scope, child)?),
+                        _ => {
+                            return Err(DatomFault {
+                                problem: DatomProblem::ExtraPosition,
+                            });
+                        }
+                    }
+                    Ok(())
+                })?;
+                Ok(Self::DuplicateActiveName {
+                    holder: holder.ok_or(DatomFault {
+                        problem: DatomProblem::MissingPosition,
+                    })?,
+                })
+            }
+            PathLockRegistrationRejectionSelection::PathOverlap => {
+                let mut position = RecordPosition { ordinal: 0 };
+                let mut path = None;
+                let mut holder = None;
+                scope.realize_body(&mut |child_scope, child| {
+                    match position.next() {
+                        0 => path = Some(Text::realize_block(child_scope, child)?.0),
+                        1 => holder = Some(PathLock::realize_block(child_scope, child)?),
+                        _ => {
+                            return Err(DatomFault {
+                                problem: DatomProblem::ExtraPosition,
+                            });
+                        }
+                    }
+                    Ok(())
+                })?;
+                Ok(Self::PathOverlap {
+                    path: PathLockPath::try_new(path.ok_or(DatomFault {
+                        problem: DatomProblem::MissingPosition,
+                    })?)?,
+                    holder: holder.ok_or(DatomFault {
+                        problem: DatomProblem::MissingPosition,
+                    })?,
+                })
+            }
+        }
+    }
+}
+
+impl DatomTextualizing for PathLockRegistrationRejection {
+    fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
+        match self {
+            Self::DuplicateActiveName { holder } => {
+                let head = Head("DuplicateActiveName".into());
+                scope.textualize_block(Shape::DottedBraced, Some(&head), |body| {
+                    let lock = Head("PathLock".into());
+                    body.textualize_block(Shape::DottedBraced, Some(&lock), |lock_body| {
+                        holder.textualize_in(lock_body)
+                    })
+                })
+            }
+            Self::PathOverlap { path, holder } => {
+                let head = Head("PathOverlap".into());
+                scope.textualize_block(Shape::DottedBraced, Some(&head), |body| {
+                    Text(path.value.clone()).textualize_in(body)?;
+                    let lock = Head("PathLock".into());
+                    body.textualize_block(Shape::DottedBraced, Some(&lock), |lock_body| {
+                        holder.textualize_in(lock_body)
+                    })
+                })
+            }
+        }
+    }
+}
+
+impl DatomRealizing for PathLockRegistered {
+    fn realize_block(scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
+        let Some(PathLockRegisteredSelection::Payload) = Self::select(block.shape, block.head())
+        else {
+            return Err(DatomFault {
+                problem: DatomProblem::Shape,
+            });
+        };
+        let mut position = RecordPosition { ordinal: 0 };
+        let mut lock = None;
+        scope.realize_body(&mut |child_scope, child| {
+            match position.next() {
+                0 => lock = Some(PathLock::realize_block(child_scope, child)?),
+                _ => {
+                    return Err(DatomFault {
+                        problem: DatomProblem::ExtraPosition,
+                    });
+                }
+            }
+            Ok(())
+        })?;
+        Ok(Self::new(lock.ok_or(DatomFault {
+            problem: DatomProblem::MissingPosition,
+        })?))
+    }
+}
+
+impl DatomTextualizing for PathLockRegistered {
+    fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
+        let lock = Head("PathLock".into());
+        scope.textualize_block(Shape::DottedBraced, Some(&lock), |body| {
+            self.lock.textualize_in(body)
+        })
+    }
+}
+
+impl DatomRealizing for PathLockRegistrationRejected {
+    fn realize_block(scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
+        let Some(PathLockRegistrationRejectedSelection::Payload) =
+            Self::select(block.shape, block.head())
+        else {
+            return Err(DatomFault {
+                problem: DatomProblem::Shape,
+            });
+        };
+        let mut position = RecordPosition { ordinal: 0 };
+        let mut requested = None;
+        let mut reason = None;
+        scope.realize_body(&mut |child_scope, child| {
+            match position.next() {
+                0 => requested = Some(PathLock::realize_block(child_scope, child)?),
+                1 => {
+                    reason = Some(PathLockRegistrationRejection::realize_block(
+                        child_scope,
+                        child,
+                    )?);
+                }
+                _ => {
+                    return Err(DatomFault {
+                        problem: DatomProblem::ExtraPosition,
+                    });
+                }
+            }
+            Ok(())
+        })?;
+        Ok(Self::new(
+            requested.ok_or(DatomFault {
+                problem: DatomProblem::MissingPosition,
+            })?,
+            reason.ok_or(DatomFault {
+                problem: DatomProblem::MissingPosition,
+            })?,
+        ))
+    }
+}
+
+impl DatomTextualizing for PathLockRegistrationRejected {
+    fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
+        let lock = Head("PathLock".into());
+        scope.textualize_block(Shape::DottedBraced, Some(&lock), |body| {
+            self.requested.textualize_in(body)
+        })?;
+        self.reason.textualize_in(scope)
+    }
+}
+
 impl EvidencedRealizing for ReportText {
     type Value = Report;
 
@@ -1569,6 +1913,132 @@ impl Textualize for InterimNote {
 
 impl Textualize for PathLock {
     type Textual = Result<PathLockText, DatomFault>;
+
+    fn textualize(&self) -> Self::Textual {
+        self.textualize_evidenced().map(|projected| projected.text)
+    }
+}
+
+impl EvidencedRealizing for PathLockRegisteredText {
+    type Value = PathLockRegistered;
+
+    fn realize_evidenced(&self) -> Result<Realized<Self::Value>, DatomFault> {
+        let mut walk = RealizeWalk::default();
+        let mut values = walk.realize_source(&self.source, |scope, block| {
+            PathLockRegistered::realize_block(scope, block)
+        })?;
+        if values.len() != 1 {
+            return Err(DatomFault {
+                problem: DatomProblem::Position,
+            });
+        }
+        Ok(Realized {
+            value: values.remove(0),
+            evidence: DatomEvidence {
+                observation: walk.observation(),
+                cursor: walk.cursor(),
+            },
+        })
+    }
+}
+
+impl EvidencedRealizing for PathLockRegistrationRejectedText {
+    type Value = PathLockRegistrationRejected;
+
+    fn realize_evidenced(&self) -> Result<Realized<Self::Value>, DatomFault> {
+        let mut walk = RealizeWalk::default();
+        let mut values = walk.realize_source(&self.source, |scope, block| {
+            PathLockRegistrationRejected::realize_block(scope, block)
+        })?;
+        if values.len() != 1 {
+            return Err(DatomFault {
+                problem: DatomProblem::Position,
+            });
+        }
+        Ok(Realized {
+            value: values.remove(0),
+            evidence: DatomEvidence {
+                observation: walk.observation(),
+                cursor: walk.cursor(),
+            },
+        })
+    }
+}
+
+impl EvidencedTextualizing for PathLockRegistered {
+    type Text = PathLockRegisteredText;
+
+    fn textualize_evidenced(&self) -> Result<Projected<Self::Text>, DatomFault> {
+        let mut walk = TextualizeWalk::default();
+        let head = Head("PathLockRegistered".into());
+        let result: Result<(), DatomFault> = walk.textualize_source(|scope| {
+            scope.textualize_block(Shape::DottedBraced, Some(&head), |body| {
+                self.textualize_in(body)
+            })
+        });
+        result.map(|()| Projected {
+            text: PathLockRegisteredText {
+                source: walk.textual_source(),
+            },
+            evidence: DatomEvidence {
+                observation: walk.observation(),
+                cursor: walk.cursor(),
+            },
+        })
+    }
+}
+
+impl EvidencedTextualizing for PathLockRegistrationRejected {
+    type Text = PathLockRegistrationRejectedText;
+
+    fn textualize_evidenced(&self) -> Result<Projected<Self::Text>, DatomFault> {
+        let mut walk = TextualizeWalk::default();
+        let head = Head("PathLockRegistrationRejected".into());
+        let result: Result<(), DatomFault> = walk.textualize_source(|scope| {
+            scope.textualize_block(Shape::DottedBraced, Some(&head), |body| {
+                self.textualize_in(body)
+            })
+        });
+        result.map(|()| Projected {
+            text: PathLockRegistrationRejectedText {
+                source: walk.textual_source(),
+            },
+            evidence: DatomEvidence {
+                observation: walk.observation(),
+                cursor: walk.cursor(),
+            },
+        })
+    }
+}
+
+impl Realize for PathLockRegisteredText {
+    type Real = PathLockRegistered;
+    type Fault = DatomFault;
+
+    fn realize(&self) -> Result<Self::Real, Self::Fault> {
+        self.realize_evidenced().map(|realized| realized.value)
+    }
+}
+
+impl Realize for PathLockRegistrationRejectedText {
+    type Real = PathLockRegistrationRejected;
+    type Fault = DatomFault;
+
+    fn realize(&self) -> Result<Self::Real, Self::Fault> {
+        self.realize_evidenced().map(|realized| realized.value)
+    }
+}
+
+impl Textualize for PathLockRegistered {
+    type Textual = Result<PathLockRegisteredText, DatomFault>;
+
+    fn textualize(&self) -> Self::Textual {
+        self.textualize_evidenced().map(|projected| projected.text)
+    }
+}
+
+impl Textualize for PathLockRegistrationRejected {
+    type Textual = Result<PathLockRegistrationRejectedText, DatomFault>;
 
     fn textualize(&self) -> Self::Textual {
         self.textualize_evidenced().map(|projected| projected.text)

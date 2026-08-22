@@ -2,8 +2,13 @@ use std::collections::BTreeMap;
 
 use datom::{
     DatomProblem, Entry, EvidenceObserving, EvidencedRealizing, EvidencedTextualizing, Group,
-    InterimNote, InterimNoteText, PathLock, PathLockConstructing, PathLockText, PathLockViewing,
-    ProjectionViewing, RealizationViewing, Report, ReportText, Text,
+    InterimNote, InterimNoteText, PathLock, PathLockConstructing, PathLockPath,
+    PathLockPathConstructing, PathLockPathViewing, PathLockRegistered,
+    PathLockRegisteredConstructing, PathLockRegisteredText, PathLockRegisteredViewing,
+    PathLockRegistrationRejected, PathLockRegistrationRejectedConstructing,
+    PathLockRegistrationRejectedText, PathLockRegistrationRejectedViewing,
+    PathLockRegistrationRejection, PathLockText, PathLockViewing, ProjectionViewing,
+    RealizationViewing, Report, ReportText, Text,
 };
 use protos::{
     FrameObserving, ObservationViewing, ParentObserving, Realize, SourceSlicing, SourceText,
@@ -110,6 +115,80 @@ fn path_lock_constructor_rejects_invalid_names_paths_and_descriptions() {
             "invalid constructor input must be rejected"
         );
     }
+}
+
+#[test]
+fn path_lock_replies_are_native_and_canonical() {
+    assert!(PathLockPath::try_new("relative".into()).is_err());
+
+    let requested = PathLock::try_new(
+        "datom".into(),
+        vec!["/home/li/primary".into()],
+        "protect the active paths".into(),
+    )
+    .expect("requested lock");
+    let holder = PathLock::try_new(
+        "other".into(),
+        vec!["/var/lock".into()],
+        "holds a conflicting path".into(),
+    )
+    .expect("holder lock");
+
+    let registered = PathLockRegistered::new(requested.clone());
+    assert_eq!(registered.lock(), &requested);
+    let registered_text = registered.textualize().expect("registered text");
+    assert_eq!(
+        registered_text.source.0,
+        "PathLockRegistered.{PathLock.{datom [/home/li/primary] (protect the active paths)}}"
+    );
+    assert_eq!(
+        PathLockRegisteredText {
+            source: registered_text.source
+        }
+        .realize()
+        .expect("registered realizes"),
+        registered
+    );
+
+    let duplicate = PathLockRegistrationRejected::new(
+        requested.clone(),
+        PathLockRegistrationRejection::DuplicateActiveName {
+            holder: holder.clone(),
+        },
+    );
+    assert_eq!(duplicate.requested(), &requested);
+    assert!(matches!(
+        duplicate.reason(),
+        PathLockRegistrationRejection::DuplicateActiveName { holder: actual } if actual == &holder
+    ));
+    assert_eq!(
+        duplicate.textualize().expect("duplicate text").source.0,
+        "PathLockRegistrationRejected.{PathLock.{datom [/home/li/primary] (protect the active paths)} DuplicateActiveName.{PathLock.{other [/var/lock] (holds a conflicting path)}}}"
+    );
+
+    let overlap = PathLockRegistrationRejected::new(
+        requested,
+        PathLockRegistrationRejection::PathOverlap {
+            path: PathLockPath::try_new("//var///lock/.".into()).expect("normalized conflict"),
+            holder,
+        },
+    );
+    assert!(matches!(
+        overlap.reason(),
+        PathLockRegistrationRejection::PathOverlap { path, .. } if path.path() == "/var/lock"
+    ));
+    assert_eq!(
+        overlap.textualize().expect("overlap text").source.0,
+        "PathLockRegistrationRejected.{PathLock.{datom [/home/li/primary] (protect the active paths)} PathOverlap.{/var/lock PathLock.{other [/var/lock] (holds a conflicting path)}}}"
+    );
+    assert_eq!(
+        PathLockRegistrationRejectedText {
+            source: overlap.textualize().expect("stable overlap text").source
+        }
+        .realize()
+        .expect("overlap realizes"),
+        overlap
+    );
 }
 
 #[test]

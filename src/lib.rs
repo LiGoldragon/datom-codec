@@ -8,6 +8,10 @@ mod datom;
 pub use datom::{
     DatomEvidence, DatomFault, DatomProblem, Entry, EvidenceObserving, EvidencedRealizing,
     EvidencedTextualizing, Group, InterimNote, InterimNoteText, PathLock, PathLockConstructing,
-    PathLockText, PathLockViewing, Projected, ProjectionViewing, RealizationViewing, Realized,
-    Report, ReportText, TagList, Text,
+    PathLockPath, PathLockPathConstructing, PathLockPathViewing, PathLockRegistered,
+    PathLockRegisteredConstructing, PathLockRegisteredText, PathLockRegisteredViewing,
+    PathLockRegistrationRejected, PathLockRegistrationRejectedConstructing,
+    PathLockRegistrationRejectedText, PathLockRegistrationRejectedViewing,
+    PathLockRegistrationRejection, PathLockText, PathLockViewing, Projected, ProjectionViewing,
+    RealizationViewing, Realized, Report, ReportText, TagList, Text,
 };
