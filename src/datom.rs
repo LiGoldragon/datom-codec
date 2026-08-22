@@ -21,6 +21,7 @@ pub enum DatomProblem {
     MissingPosition,
     AmbiguousMapPair,
     Path,
+    Name,
     Protos(WalkFault),
 }
 
@@ -68,11 +69,24 @@ pub struct InterimNote {
 }
 
 /// A named registration that exclusively describes the paths it protects.
+///
+/// ```compile_fail
+/// use datom::PathLock;
+///
+/// let _ = PathLock {
+///     name: "datom".into(),
+///     paths: vec!["/home/li/primary".into()],
+///     description: "protect the active paths".into(),
+/// };
+/// ```
+///
+/// Construct this value through `PathLock::try_new` after importing
+/// [`PathLockConstructing`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PathLock {
-    pub name: String,
-    pub paths: Vec<String>,
-    pub description: String,
+    name: String,
+    paths: Vec<String>,
+    description: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -142,6 +156,18 @@ pub trait EvidencedTextualizing {
     type Text;
 
     fn textualize_evidenced(&self) -> Result<Projected<Self::Text>, DatomFault>;
+}
+
+/// Checked construction for native path-lock registrations.
+pub trait PathLockConstructing: Sized {
+    fn try_new(name: String, paths: Vec<String>, description: String) -> Result<Self, DatomFault>;
+}
+
+/// Read-only access to a validated path-lock registration.
+pub trait PathLockViewing {
+    fn name(&self) -> &str;
+    fn paths(&self) -> &[String];
+    fn description(&self) -> &str;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -306,6 +332,10 @@ trait DescriptionChecking {
     fn checked_description(&self) -> Result<(), DatomFault>;
 }
 
+trait NameChecking {
+    fn checked_name(&self) -> Result<(), DatomFault>;
+}
+
 // Headed payloads are never normalized globally. These are the only
 // context-owned carrier/body admissions: Entry::Note validates Note,
 // Entry::Group validates Group then selects GroupPayloading, Entry::Tags
@@ -402,6 +432,44 @@ impl DescriptionChecking for String {
             });
         }
         Ok(())
+    }
+}
+
+impl NameChecking for String {
+    fn checked_name(&self) -> Result<(), DatomFault> {
+        if self.trim().is_empty() || self.contains(['\n', '\r']) {
+            return Err(DatomFault {
+                problem: DatomProblem::Name,
+            });
+        }
+        Ok(())
+    }
+}
+
+impl PathLockConstructing for PathLock {
+    fn try_new(name: String, paths: Vec<String>, description: String) -> Result<Self, DatomFault> {
+        name.checked_name()?;
+        let paths = paths.normalized_paths()?;
+        description.checked_description()?;
+        Ok(Self {
+            name,
+            paths,
+            description,
+        })
+    }
+}
+
+impl PathLockViewing for PathLock {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn paths(&self) -> &[String] {
+        &self.paths
+    }
+
+    fn description(&self) -> &str {
+        &self.description
     }
 }
 
@@ -1297,23 +1365,23 @@ impl DatomRealizing for PathLock {
         let description = description.ok_or(DatomFault {
             problem: DatomProblem::MissingPosition,
         })?;
-        description.checked_description()?;
-        Ok(Self {
-            name: name.ok_or(DatomFault {
+        Self::try_new(
+            name.ok_or(DatomFault {
                 problem: DatomProblem::MissingPosition,
             })?,
-            paths: paths.normalized_paths()?,
+            paths,
             description,
-        })
+        )
     }
 }
 
 impl DatomTextualizing for PathLock {
     fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
-        self.description.checked_description()?;
-        let paths = self.paths.normalized_paths()?;
         Text(self.name.clone()).textualize_in(scope)?;
-        PathList { value: paths }.textualize_in(scope)?;
+        PathList {
+            value: self.paths.clone(),
+        }
+        .textualize_in(scope)?;
         Text(self.description.clone()).textualize_in(scope)
     }
 }

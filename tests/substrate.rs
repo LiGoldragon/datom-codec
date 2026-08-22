@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use datom::{
     DatomProblem, Entry, EvidenceObserving, EvidencedRealizing, EvidencedTextualizing, Group,
-    InterimNote, InterimNoteText, PathLock, PathLockText, ProjectionViewing, RealizationViewing,
-    Report, ReportText, Text,
+    InterimNote, InterimNoteText, PathLock, PathLockConstructing, PathLockText, PathLockViewing,
+    ProjectionViewing, RealizationViewing, Report, ReportText, Text,
 };
 use protos::{
     FrameObserving, ObservationViewing, ParentObserving, Realize, SourceSlicing, SourceText,
@@ -47,12 +47,16 @@ fn path_lock_realizes_normalized_paths_and_canonically_projects() {
     let lock = source.realize().expect("path lock realizes");
     assert_eq!(
         lock,
-        PathLock {
-            name: "datom".into(),
-            paths: vec!["/home/li/primary".into(), "/var/lock".into()],
-            description: "protect the active paths".into(),
-        }
+        PathLock::try_new(
+            "datom".into(),
+            vec!["/home/li/primary".into(), "/var/lock".into()],
+            "protect the active paths".into(),
+        )
+        .expect("valid path lock")
     );
+    assert_eq!(lock.name(), "datom");
+    assert_eq!(lock.paths(), ["/home/li/primary", "/var/lock"]);
+    assert_eq!(lock.description(), "protect the active paths");
     let canonical = lock.textualize().expect("path lock textualizes");
     assert_eq!(
         canonical.source.0,
@@ -62,8 +66,17 @@ fn path_lock_realizes_normalized_paths_and_canonically_projects() {
 }
 
 #[test]
-fn path_lock_rejects_invalid_paths_and_descriptions() {
+fn path_lock_constructor_rejects_invalid_names_paths_and_descriptions() {
+    for name in ["", " \t", "first\nsecond"] {
+        assert!(
+            PathLock::try_new(name.into(), vec!["/home/li".into()], "description".into()).is_err(),
+            "{name:?} must be rejected"
+        );
+    }
+
     for source in [
+        "PathLock.{ () [/home/li] description }",
+        "PathLock.{ (first\nsecond) [/home/li] description }",
         "PathLock.{ datom [] description }",
         "PathLock.{ datom [ relative ] description }",
         "PathLock.{ datom [ /home/../li ] description }",
@@ -81,39 +94,21 @@ fn path_lock_rejects_invalid_paths_and_descriptions() {
         );
     }
 
-    for lock in [
-        PathLock {
-            name: "datom".into(),
-            paths: Vec::new(),
-            description: "description".into(),
-        },
-        PathLock {
-            name: "datom".into(),
-            paths: vec!["relative".into()],
-            description: "description".into(),
-        },
-        PathLock {
-            name: "datom".into(),
-            paths: vec!["/home/../li".into()],
-            description: "description".into(),
-        },
-        PathLock {
-            name: "datom".into(),
-            paths: vec!["/home/li".into(), "//home//li/.".into()],
-            description: "description".into(),
-        },
-        PathLock {
-            name: "datom".into(),
-            paths: vec!["/home/li".into()],
-            description: " \t".into(),
-        },
-        PathLock {
-            name: "datom".into(),
-            paths: vec!["/home/li".into()],
-            description: "first\nsecond".into(),
-        },
+    for (paths, description) in [
+        (Vec::new(), "description"),
+        (vec!["relative".into()], "description"),
+        (vec!["/home/../li".into()], "description"),
+        (
+            vec!["/home/li".into(), "//home//li/.".into()],
+            "description",
+        ),
+        (vec!["/home/li".into()], " \t"),
+        (vec!["/home/li".into()], "first\nsecond"),
     ] {
-        assert!(lock.textualize().is_err(), "{lock:?} must be rejected");
+        assert!(
+            PathLock::try_new("datom".into(), paths, description.into()).is_err(),
+            "invalid constructor input must be rejected"
+        );
     }
 }
 

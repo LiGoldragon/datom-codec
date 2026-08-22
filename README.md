@@ -14,7 +14,10 @@ only context-sensitive typed realization and textual projection.
   Protos directly, without a compatibility record. Its path list is nonempty;
   every path is absolute and canonicalizes repeated separators and `.`
   segments. Relative paths, `..` segments, and duplicate canonical paths are
-  rejected. Descriptions are nonblank single lines.
+  rejected. Names and descriptions are nonblank single lines.
+  Construct it only through `PathLock::try_new` with
+  `PathLockConstructing` in scope; `PathLockViewing` exposes its three
+  validated values read-only.
 - `ReportText`, `InterimNoteText`, and `PathLockText` are concrete typed
   textual carriers. They implement Protos `Realize`; their matching real types
   implement Protos `Textualize`.
