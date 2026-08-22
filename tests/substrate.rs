@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use datom::{
     DatomProblem, Entry, EvidenceObserving, EvidencedRealizing, EvidencedTextualizing, Group,
-    InterimNote, InterimNoteText, ProjectionViewing, RealizationViewing, Report, ReportText, Text,
+    InterimNote, InterimNoteText, PathLock, PathLockText, ProjectionViewing, RealizationViewing,
+    Report, ReportText, Text,
 };
 use protos::{
     FrameObserving, ObservationViewing, ParentObserving, Realize, SourceSlicing, SourceText,
@@ -34,6 +35,87 @@ const CARRIERS: &str = r#"InterimNote.{
   “legacy carrier still accepted”
 }
 "#;
+
+#[test]
+fn path_lock_realizes_normalized_paths_and_canonically_projects() {
+    let source = PathLockText {
+        source: SourceText(
+            "PathLock.{ datom [ //home//li/./primary /var///lock ] (protect the active paths) }"
+                .into(),
+        ),
+    };
+    let lock = source.realize().expect("path lock realizes");
+    assert_eq!(
+        lock,
+        PathLock {
+            name: "datom".into(),
+            paths: vec!["/home/li/primary".into(), "/var/lock".into()],
+            description: "protect the active paths".into(),
+        }
+    );
+    let canonical = lock.textualize().expect("path lock textualizes");
+    assert_eq!(
+        canonical.source.0,
+        "PathLock.{datom [/home/li/primary /var/lock] (protect the active paths)}"
+    );
+    assert_eq!(canonical.realize().expect("canonical path lock"), lock);
+}
+
+#[test]
+fn path_lock_rejects_invalid_paths_and_descriptions() {
+    for source in [
+        "PathLock.{ datom [] description }",
+        "PathLock.{ datom [ relative ] description }",
+        "PathLock.{ datom [ /home/../li ] description }",
+        "PathLock.{ datom [ /home/li //home//li/. ] description }",
+        "PathLock.{ datom [ /home/li ] () }",
+        "PathLock.{ datom [ /home/li ] (first\nsecond) }",
+    ] {
+        assert!(
+            PathLockText {
+                source: SourceText(source.into()),
+            }
+            .realize()
+            .is_err(),
+            "{source} must be rejected"
+        );
+    }
+
+    for lock in [
+        PathLock {
+            name: "datom".into(),
+            paths: Vec::new(),
+            description: "description".into(),
+        },
+        PathLock {
+            name: "datom".into(),
+            paths: vec!["relative".into()],
+            description: "description".into(),
+        },
+        PathLock {
+            name: "datom".into(),
+            paths: vec!["/home/../li".into()],
+            description: "description".into(),
+        },
+        PathLock {
+            name: "datom".into(),
+            paths: vec!["/home/li".into(), "//home//li/.".into()],
+            description: "description".into(),
+        },
+        PathLock {
+            name: "datom".into(),
+            paths: vec!["/home/li".into()],
+            description: " \t".into(),
+        },
+        PathLock {
+            name: "datom".into(),
+            paths: vec!["/home/li".into()],
+            description: "first\nsecond".into(),
+        },
+    ] {
+        assert!(lock.textualize().is_err(), "{lock:?} must be rejected");
+    }
+}
 
 #[test]
 fn deep_ruled_fixture_uses_protos_scopes_and_is_canonically_stable() {

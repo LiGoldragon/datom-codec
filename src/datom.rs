@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use protos::{
     Block, BlockScanning, CursorObserving, Head, Headed, Realize, RealizeDriving, RealizeScope,
@@ -20,6 +20,7 @@ pub enum DatomProblem {
     ExtraPosition,
     MissingPosition,
     AmbiguousMapPair,
+    Path,
     Protos(WalkFault),
 }
 
@@ -66,6 +67,14 @@ pub struct InterimNote {
     pub d: String,
 }
 
+/// A named registration that exclusively describes the paths it protects.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PathLock {
+    pub name: String,
+    pub paths: Vec<String>,
+    pub description: String,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReportText {
     pub source: SourceText,
@@ -73,6 +82,12 @@ pub struct ReportText {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InterimNoteText {
+    pub source: SourceText,
+}
+
+/// Textual source for one native path-lock registration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PathLockText {
     pub source: SourceText,
 }
 
@@ -162,6 +177,11 @@ struct TextMap {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+struct PathList {
+    value: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TextSelection {
     Plain,
 }
@@ -181,6 +201,16 @@ pub enum GroupSelection {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TagListSelection {
+    Payload,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PathLockSelection {
+    Payload,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum PathListSelection {
     Payload,
 }
 
@@ -264,6 +294,18 @@ trait CarrierRealizing {
     fn text(&self) -> String;
 }
 
+trait PathNormalizing {
+    fn normalized_path(&self) -> Result<String, DatomFault>;
+}
+
+trait PathListNormalizing {
+    fn normalized_paths(&self) -> Result<Vec<String>, DatomFault>;
+}
+
+trait DescriptionChecking {
+    fn checked_description(&self) -> Result<(), DatomFault>;
+}
+
 // Headed payloads are never normalized globally. These are the only
 // context-owned carrier/body admissions: Entry::Note validates Note,
 // Entry::Group validates Group then selects GroupPayloading, Entry::Tags
@@ -300,6 +342,66 @@ impl CarrierRealizing for StringCarrier {
             }
             Self::Bare(_) | Self::CurlyQuoted(_) => self.textual_body().to_owned(),
         }
+    }
+}
+
+impl PathNormalizing for String {
+    fn normalized_path(&self) -> Result<String, DatomFault> {
+        if !self.starts_with('/') {
+            return Err(DatomFault {
+                problem: DatomProblem::Path,
+            });
+        }
+        let mut segments = Vec::new();
+        for segment in self.split('/') {
+            match segment {
+                "" | "." => {}
+                ".." => {
+                    return Err(DatomFault {
+                        problem: DatomProblem::Path,
+                    });
+                }
+                value => segments.push(value),
+            }
+        }
+        Ok(if segments.is_empty() {
+            "/".into()
+        } else {
+            format!("/{}", segments.join("/"))
+        })
+    }
+}
+
+impl PathListNormalizing for Vec<String> {
+    fn normalized_paths(&self) -> Result<Vec<String>, DatomFault> {
+        if self.is_empty() {
+            return Err(DatomFault {
+                problem: DatomProblem::Path,
+            });
+        }
+        let mut paths = Vec::with_capacity(self.len());
+        let mut seen = BTreeSet::new();
+        for path in self {
+            let normalized = path.normalized_path()?;
+            if !seen.insert(normalized.clone()) {
+                return Err(DatomFault {
+                    problem: DatomProblem::Path,
+                });
+            }
+            paths.push(normalized);
+        }
+        Ok(paths)
+    }
+}
+
+impl DescriptionChecking for String {
+    fn checked_description(&self) -> Result<(), DatomFault> {
+        if self.trim().is_empty() || self.contains(['\n', '\r']) {
+            return Err(DatomFault {
+                problem: DatomProblem::Position,
+            });
+        }
+        Ok(())
     }
 }
 
@@ -514,6 +616,31 @@ impl ShapeDefined for TagList {
     }
 }
 
+impl ShapeDefined for PathLock {
+    type Selection = PathLockSelection;
+
+    fn shapes() -> &'static [Shape] {
+        &[Shape::DottedBraced]
+    }
+
+    fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
+        (shape == Shape::DottedBraced && head == Some(&Head("PathLock".into())))
+            .then_some(PathLockSelection::Payload)
+    }
+}
+
+impl ShapeDefined for PathList {
+    type Selection = PathListSelection;
+
+    fn shapes() -> &'static [Shape] {
+        &[Shape::SquareBracketed]
+    }
+
+    fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
+        (shape == Shape::SquareBracketed && head.is_none()).then_some(PathListSelection::Payload)
+    }
+}
+
 impl ShapeDefined for EntryVector {
     type Selection = ();
 
@@ -629,6 +756,31 @@ impl DatomTextualizing for Text {
                 Ok(())
             })
         }
+    }
+}
+
+impl DatomRealizing for PathList {
+    fn realize_block(scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
+        let Some(PathListSelection::Payload) = Self::select(block.shape, block.head()) else {
+            return Err(DatomFault {
+                problem: DatomProblem::Shape,
+            });
+        };
+        let value = scope.realize_body(&mut |child_scope, child| {
+            Ok::<_, DatomFault>(Text::realize_block(child_scope, child)?.0)
+        })?;
+        Ok(Self { value })
+    }
+}
+
+impl DatomTextualizing for PathList {
+    fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
+        scope.textualize_block(Shape::SquareBracketed, None, |body| {
+            for path in &self.value {
+                Text(path.clone()).textualize_in(body)?;
+            }
+            Ok(())
+        })
     }
 }
 
@@ -1115,6 +1267,57 @@ impl DatomTextualizing for InterimNote {
     }
 }
 
+impl DatomRealizing for PathLock {
+    fn realize_block(scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
+        let Some(PathLockSelection::Payload) = Self::select(block.shape, block.head()) else {
+            return Err(DatomFault {
+                problem: DatomProblem::Shape,
+            });
+        };
+        let mut position = RecordPosition { ordinal: 0 };
+        let mut name = None;
+        let mut paths = None;
+        let mut description = None;
+        scope.realize_body(&mut |child_scope, child| {
+            match position.next() {
+                0 => name = Some(Text::realize_block(child_scope, child)?.0),
+                1 => paths = Some(PathList::realize_block(child_scope, child)?.value),
+                2 => description = Some(Text::realize_block(child_scope, child)?.0),
+                _ => {
+                    return Err(DatomFault {
+                        problem: DatomProblem::ExtraPosition,
+                    });
+                }
+            }
+            Ok(())
+        })?;
+        let paths = paths.ok_or(DatomFault {
+            problem: DatomProblem::MissingPosition,
+        })?;
+        let description = description.ok_or(DatomFault {
+            problem: DatomProblem::MissingPosition,
+        })?;
+        description.checked_description()?;
+        Ok(Self {
+            name: name.ok_or(DatomFault {
+                problem: DatomProblem::MissingPosition,
+            })?,
+            paths: paths.normalized_paths()?,
+            description,
+        })
+    }
+}
+
+impl DatomTextualizing for PathLock {
+    fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
+        self.description.checked_description()?;
+        let paths = self.paths.normalized_paths()?;
+        Text(self.name.clone()).textualize_in(scope)?;
+        PathList { value: paths }.textualize_in(scope)?;
+        Text(self.description.clone()).textualize_in(scope)
+    }
+}
+
 impl EvidencedRealizing for ReportText {
     type Value = Report;
 
@@ -1145,6 +1348,29 @@ impl EvidencedRealizing for InterimNoteText {
         let mut walk = RealizeWalk::default();
         let mut values = walk.realize_source(&self.source, |scope, block| {
             InterimNote::realize_block(scope, block)
+        })?;
+        if values.len() != 1 {
+            return Err(DatomFault {
+                problem: DatomProblem::Position,
+            });
+        }
+        Ok(Realized {
+            value: values.remove(0),
+            evidence: DatomEvidence {
+                observation: walk.observation(),
+                cursor: walk.cursor(),
+            },
+        })
+    }
+}
+
+impl EvidencedRealizing for PathLockText {
+    type Value = PathLock;
+
+    fn realize_evidenced(&self) -> Result<Realized<Self::Value>, DatomFault> {
+        let mut walk = RealizeWalk::default();
+        let mut values = walk.realize_source(&self.source, |scope, block| {
+            PathLock::realize_block(scope, block)
         })?;
         if values.len() != 1 {
             return Err(DatomFault {
@@ -1207,6 +1433,29 @@ impl EvidencedTextualizing for InterimNote {
     }
 }
 
+impl EvidencedTextualizing for PathLock {
+    type Text = PathLockText;
+
+    fn textualize_evidenced(&self) -> Result<Projected<Self::Text>, DatomFault> {
+        let mut walk = TextualizeWalk::default();
+        let head = Head("PathLock".into());
+        let result: Result<(), DatomFault> = walk.textualize_source(|scope| {
+            scope.textualize_block(Shape::DottedBraced, Some(&head), |body| {
+                self.textualize_in(body)
+            })
+        });
+        result.map(|()| Projected {
+            text: PathLockText {
+                source: walk.textual_source(),
+            },
+            evidence: DatomEvidence {
+                observation: walk.observation(),
+                cursor: walk.cursor(),
+            },
+        })
+    }
+}
+
 impl Realize for ReportText {
     type Real = Report;
     type Fault = DatomFault;
@@ -1225,6 +1474,15 @@ impl Realize for InterimNoteText {
     }
 }
 
+impl Realize for PathLockText {
+    type Real = PathLock;
+    type Fault = DatomFault;
+
+    fn realize(&self) -> Result<Self::Real, Self::Fault> {
+        self.realize_evidenced().map(|realized| realized.value)
+    }
+}
+
 impl Textualize for Report {
     type Textual = Result<ReportText, DatomFault>;
 
@@ -1235,6 +1493,14 @@ impl Textualize for Report {
 
 impl Textualize for InterimNote {
     type Textual = Result<InterimNoteText, DatomFault>;
+
+    fn textualize(&self) -> Self::Textual {
+        self.textualize_evidenced().map(|projected| projected.text)
+    }
+}
+
+impl Textualize for PathLock {
+    type Textual = Result<PathLockText, DatomFault>;
 
     fn textualize(&self) -> Self::Textual {
         self.textualize_evidenced().map(|projected| projected.text)

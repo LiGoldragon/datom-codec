@@ -9,9 +9,15 @@ only context-sensitive typed realization and textual projection.
 
 - `Report`, `Entry`, `Group`, `TagList`, `Text`, and `InterimNote` are the
   concrete positional models used by the registered design examples.
-- `ReportText` and `InterimNoteText` are concrete typed textual carriers. They
-  implement Protos `Realize`; their matching real types implement Protos
-  `Textualize`.
+- `PathLock` is the native path-lock record: its `PathLockText` form is
+  `PathLock.{name [paths] description}`. It realizes and textualizes through
+  Protos directly, without a compatibility record. Its path list is nonempty;
+  every path is absolute and canonicalizes repeated separators and `.`
+  segments. Relative paths, `..` segments, and duplicate canonical paths are
+  rejected. Descriptions are nonblank single lines.
+- `ReportText`, `InterimNoteText`, and `PathLockText` are concrete typed
+  textual carriers. They implement Protos `Realize`; their matching real types
+  implement Protos `Textualize`.
 - `EvidencedRealizing` and `EvidencedTextualizing` return those same typed
   values/texts paired with read-only transition evidence copied from the
   actual Protos driver; dialect code never owns or proxies `Walk`.
