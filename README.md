@@ -12,6 +12,15 @@ only context-sensitive typed realization and textual projection.
 - `ReportText` and `InterimNoteText` are concrete typed textual carriers. They
   implement Protos `Realize`; their matching real types implement Protos
   `Textualize`.
+- `DatomText<T>` is the public typed textual carrier for a consumer-defined
+  `DatomRoot`. `DatomRealizing` and `DatomTextualizing` are the scoped schema
+  seams for its variants and positional records; `DatomRoot` starts the one
+  document walk and provides canonical `textualize_source` projection.
+- `String`, `bool`, `PathBuf`, `Vec<T>`, and `BTreeMap<String, T>` implement
+  those seams. Booleans project as bare `true` or `false`; paths use Datom's
+  ordinary string carrier and reject non-Unicode host paths. Vectors are
+  headless square blocks. Generic maps project as `Map.[key.[value]]`, one
+  value per key; concrete `Report` keeps its established map spellings.
 - `EvidencedRealizing` and `EvidencedTextualizing` return those same typed
   values/texts paired with read-only transition evidence copied from the
   actual Protos driver; dialect code never owns or proxies `Walk`.
@@ -30,3 +39,12 @@ only context-sensitive typed realization and textual projection.
 
 Canonical text is a block projection, not preservation of original whitespace
 or the legacy curly carrier spelling.
+
+## Consumer-defined root
+
+An external program defines its own root enum and positional configuration
+records, implements `DatomRealizing` and `DatomTextualizing` for each, and
+implements `DatomRoot` on the root enum. It reads with
+`DatomText::<Request>::from(SourceText(input.into())).realize()` and writes
+with `request.textualize_source()`. The supplied scopes are the only recursive
+entry point: do not construct a Protos walk or parser inside the program.

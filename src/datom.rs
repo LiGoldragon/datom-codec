@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, marker::PhantomData, path::PathBuf};
 
 use protos::{
     Block, BlockScanning, CursorObserving, Head, Headed, Realize, RealizeDriving, RealizeScope,
@@ -16,6 +16,8 @@ pub struct DatomFault {
 pub enum DatomProblem {
     Shape,
     Head,
+    Value,
+    Path,
     Position,
     ExtraPosition,
     MissingPosition,
@@ -195,13 +197,15 @@ enum OptionalSelection {
     Some,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct RecordPosition {
+/// The position counter used while realizing a positional record body.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct RecordPosition {
     ordinal: usize,
 }
 
-trait PositionAdvancing {
-    fn next(&mut self) -> usize;
+/// Advances a positional record counter owned by a dialect schema.
+pub trait PositionAdvancing {
+    fn next_position(&mut self) -> usize;
 }
 
 impl EvidenceObserving for DatomEvidence {
@@ -235,19 +239,217 @@ impl<T> ProjectionViewing<T> for Projected<T> {
 }
 
 impl PositionAdvancing for RecordPosition {
-    fn next(&mut self) -> usize {
+    fn next_position(&mut self) -> usize {
         let ordinal = self.ordinal;
         self.ordinal += 1;
         ordinal
     }
 }
 
-trait DatomRealizing: Sized {
+/// The Datom realization seam for one typed value in an active structural scope.
+///
+/// External schemas implement this on their own enum, record, and scalar wrapper
+/// types. Recursive work must use the supplied scope rather than a new Protos walk.
+pub trait DatomRealizing: Sized {
     fn realize_block(scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault>;
 }
 
-trait DatomTextualizing {
+/// The Datom canonical-projection seam for one typed value in an active scope.
+pub trait DatomTextualizing {
     fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault>;
+}
+
+/// A top-level, headed Datom enum whose text is `Head.{ variant }`.
+///
+/// The default operations start the only Protos walk used for a document. Child
+/// records and variants stay inside the scopes supplied by `DatomRealizing` and
+/// `DatomTextualizing`, so a consumer never needs a runtime-local parser.
+pub trait DatomRoot: DatomRealizing + DatomTextualizing {
+    fn root_head() -> Head;
+
+    fn realize_source(source: &SourceText) -> Result<Self, DatomFault> {
+        let mut walk = RealizeWalk::default();
+        let mut values =
+            walk.realize_source(source, |scope, block| Self::realize_block(scope, block))?;
+        if values.len() != 1 {
+            return Err(DatomFault {
+                problem: DatomProblem::Position,
+            });
+        }
+        Ok(values.remove(0))
+    }
+
+    fn textualize_source(&self) -> Result<SourceText, DatomFault> {
+        let mut walk = TextualizeWalk::default();
+        let head = Self::root_head();
+        walk.textualize_source(|scope| {
+            scope.textualize_block(Shape::DottedBraced, Some(&head), |body| {
+                self.textualize_in(body)
+            })
+        })?;
+        Ok(walk.textual_source())
+    }
+}
+
+/// The typed textual carrier for any external `DatomRoot`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DatomText<T> {
+    pub source: SourceText,
+    real: PhantomData<fn() -> T>,
+}
+
+impl<T> From<SourceText> for DatomText<T> {
+    fn from(source: SourceText) -> Self {
+        Self {
+            source,
+            real: PhantomData,
+        }
+    }
+}
+
+impl<T: DatomRoot> Realize for DatomText<T> {
+    type Real = T;
+    type Fault = DatomFault;
+
+    fn realize(&self) -> Result<Self::Real, Self::Fault> {
+        T::realize_source(&self.source)
+    }
+}
+
+impl DatomRealizing for String {
+    fn realize_block(scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
+        Ok(Text::realize_block(scope, block)?.0)
+    }
+}
+
+impl DatomTextualizing for String {
+    fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
+        Text(self.clone()).textualize_in(scope)
+    }
+}
+
+impl DatomRealizing for bool {
+    fn realize_block(_: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
+        if block.shape != Shape::Bare || block.head().is_some() {
+            return Err(DatomFault {
+                problem: DatomProblem::Shape,
+            });
+        }
+        match block.body.0.as_str() {
+            "true" => Ok(true),
+            "false" => Ok(false),
+            _ => Err(DatomFault {
+                problem: DatomProblem::Value,
+            }),
+        }
+    }
+}
+
+impl DatomTextualizing for bool {
+    fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
+        scope.textualize_block(Shape::Bare, None, |body| {
+            body.emit_scalar(if *self { "true" } else { "false" });
+            Ok(())
+        })
+    }
+}
+
+impl DatomRealizing for PathBuf {
+    fn realize_block(scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
+        Ok(Self::from(String::realize_block(scope, block)?))
+    }
+}
+
+impl DatomTextualizing for PathBuf {
+    fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
+        let path = self.to_str().ok_or(DatomFault {
+            problem: DatomProblem::Path,
+        })?;
+        path.to_owned().textualize_in(scope)
+    }
+}
+
+impl<T: DatomRealizing> DatomRealizing for Vec<T> {
+    fn realize_block(scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
+        if block.shape != Shape::SquareBracketed || block.head().is_some() {
+            return Err(DatomFault {
+                problem: DatomProblem::Shape,
+            });
+        }
+        scope.realize_body(&mut |child_scope, child| T::realize_block(child_scope, child))
+    }
+}
+
+impl<T: DatomTextualizing> DatomTextualizing for Vec<T> {
+    fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
+        scope.textualize_block(Shape::SquareBracketed, None, |body| {
+            for value in self {
+                value.textualize_in(body)?;
+            }
+            Ok(())
+        })
+    }
+}
+
+impl<T: DatomRealizing> DatomRealizing for BTreeMap<String, T> {
+    fn realize_block(scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
+        if block.shape != Shape::DottedSquareBracketed || block.head() != Some(&Head("Map".into()))
+        {
+            return Err(DatomFault {
+                problem: DatomProblem::Shape,
+            });
+        }
+        let entries = scope.realize_body(&mut |entry_scope, entry| {
+            if entry.shape != Shape::DottedSquareBracketed {
+                return Err(DatomFault {
+                    problem: DatomProblem::Shape,
+                });
+            }
+            let key = entry
+                .head()
+                .ok_or(DatomFault {
+                    problem: DatomProblem::Head,
+                })?
+                .text();
+            key.group_key()?;
+            let mut values = entry_scope
+                .realize_body(&mut |value_scope, value| T::realize_block(value_scope, value))?;
+            match values.len() {
+                0 => Err(DatomFault {
+                    problem: DatomProblem::MissingPosition,
+                }),
+                1 => Ok((key, values.remove(0))),
+                _ => Err(DatomFault {
+                    problem: DatomProblem::ExtraPosition,
+                }),
+            }
+        })?;
+        let mut values = BTreeMap::new();
+        for (key, value) in entries {
+            if values.insert(key, value).is_some() {
+                return Err(DatomFault {
+                    problem: DatomProblem::Position,
+                });
+            }
+        }
+        Ok(values)
+    }
+}
+
+impl<T: DatomTextualizing> DatomTextualizing for BTreeMap<String, T> {
+    fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
+        let map = Head("Map".into());
+        scope.textualize_block(Shape::DottedSquareBracketed, Some(&map), |body| {
+            for (key, value) in self {
+                key.group_key()?;
+                let entry = Head(key.clone());
+                body.textualize_block(Shape::DottedSquareBracketed, Some(&entry), |entry_scope| {
+                    value.textualize_in(entry_scope)
+                })?;
+            }
+            Ok(())
+        })
+    }
 }
 
 trait TagPayloading: Sized {
@@ -842,7 +1044,7 @@ impl GroupPayloading for Group {
         let mut children = None;
         let mut annotations = None;
         scope.realize_body(&mut |child_scope, child| {
-            match position.next() {
+            match position.next_position() {
                 0 => title = Some(Text::realize_block(child_scope, child)?),
                 1 => children = Some(EntryVector::realize_block(child_scope, child)?.value),
                 2 => annotations = Some(TextMap::realize_block(child_scope, child)?.value),
@@ -1034,7 +1236,7 @@ impl DatomRealizing for Report {
         let mut groups = None;
         let mut latest = None;
         scope.realize_body(&mut |child_scope, child| {
-            match position.next() {
+            match position.next_position() {
                 0 => heading = Some(Text::realize_block(child_scope, child)?),
                 1 => groups = Some(GroupMap::realize_block(child_scope, child)?.value),
                 2 => latest = Some(OptionalText::realize_block(child_scope, child)?.value),
@@ -1084,7 +1286,7 @@ impl DatomRealizing for InterimNote {
         let mut position = RecordPosition { ordinal: 0 };
         let mut fields = Vec::new();
         scope.realize_body(&mut |child_scope, child| {
-            if position.next() >= 4 {
+            if position.next_position() >= 4 {
                 return Err(DatomFault {
                     problem: DatomProblem::ExtraPosition,
                 });
@@ -1112,6 +1314,18 @@ impl DatomTextualizing for InterimNote {
             Text(value.clone()).textualize_in(scope)?;
         }
         Ok(())
+    }
+}
+
+impl DatomRoot for Report {
+    fn root_head() -> Head {
+        Head("Report".into())
+    }
+}
+
+impl DatomRoot for InterimNote {
+    fn root_head() -> Head {
+        Head("InterimNote".into())
     }
 }
 
