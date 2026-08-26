@@ -1,5 +1,12 @@
 # Upgrades
 
+## 0.4.0
+
+Plain Strings no longer accept or project parenthesis-delimited text. Replace
+every delimited plain String with curly quotes (`“ … ”`); bare text remains a
+String only where the expected type is String. Parentheses are reserved for
+the future structured String, Meaning, and are not a Datom plain-String form.
+
 ## 0.3.0
 
 Map containers now use headless guillemets: replace `Map.[ … ]` with

@@ -2,8 +2,8 @@ use std::{collections::BTreeMap, marker::PhantomData, path::PathBuf};
 
 use protos::{
     Block, BlockScanning, CursorObserving, Head, Headed, Realize, RealizeDriving, RealizeScope,
-    RealizeScoping, RealizeWalk, Shape, ShapeDefined, SourceText, StringCarrier, StringCarrying,
-    Textualize, TextualizeDriving, TextualizeScope, TextualizeScoping, TextualizeWalk, WalkFault,
+    RealizeScoping, RealizeWalk, Shape, ShapeDefined, SourceText, StringCarrying, Textualize,
+    TextualizeDriving, TextualizeScope, TextualizeScoping, TextualizeWalk, WalkFault,
     WalkObservation, WalkObserving,
 };
 
@@ -453,83 +453,6 @@ trait GroupPayloading: Sized {
     fn textualize_group_payload(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault>;
 }
 
-trait CarrierRealizing {
-    fn text(&self) -> String;
-}
-
-// Headed payloads are never normalized globally. These are the only
-// context-owned carrier/body admissions: Entry::Note validates Note,
-// Entry::Group validates Group then selects GroupPayloading, Entry::Tags
-// validates Tags then selects TagPayloading, OptionalText validates Some,
-// TextMapEntry validates its key, GroupMapEntry validates its key, and record
-// variants validate their own heads before entering positional bodies.
-
-impl CarrierRealizing for StringCarrier {
-    fn text(&self) -> String {
-        match self {
-            Self::Parenthesized(body) => {
-                let mut text = String::new();
-                let mut escaped = false;
-                for character in body.chars() {
-                    if escaped {
-                        match character {
-                            '\\' | '(' | ')' => text.push(character),
-                            other => {
-                                text.push('\\');
-                                text.push(other);
-                            }
-                        }
-                        escaped = false;
-                    } else if character == '\\' {
-                        escaped = true;
-                    } else {
-                        text.push(character);
-                    }
-                }
-                if escaped {
-                    text.push('\\');
-                }
-                text
-            }
-            Self::Bare(_) | Self::CurlyQuoted(_) => self.textual_body().to_owned(),
-        }
-    }
-}
-
-trait ParenthesisProjecting {
-    fn parenthesized_body(&self) -> String;
-}
-
-impl ParenthesisProjecting for Text {
-    fn parenthesized_body(&self) -> String {
-        let characters: Vec<char> = self.0.chars().collect();
-        let mut opens = Vec::new();
-        let mut escaped = Vec::new();
-        for (index, character) in characters.iter().enumerate() {
-            match character {
-                '(' => opens.push(index),
-                ')' if opens.is_empty() => escaped.push(index),
-                ')' => {
-                    opens.pop();
-                }
-                _ => {}
-            }
-        }
-        escaped.extend(opens);
-        let mut projected = String::new();
-        for (index, character) in characters.into_iter().enumerate() {
-            if character == '\\' {
-                projected.push('\\');
-            }
-            if escaped.contains(&index) {
-                projected.push('\\');
-            }
-            projected.push(character);
-        }
-        projected
-    }
-}
-
 trait BareProjecting {
     fn fits_bare(&self) -> bool;
 }
@@ -597,14 +520,14 @@ impl MapKeyChecking for String {
         let candidate = if value.fits_bare() {
             SourceText(format!("{}.{}", self, value.0))
         } else {
-            SourceText(format!("{}.({})", self, value.parenthesized_body()))
+            SourceText(format!("{}.“{}”", self, value.0))
         };
         match candidate.blocks() {
             Ok(blocks)
                 if blocks.len() == 1
                     && ((blocks[0].shape == Shape::Bare
                         && blocks[0].divide().is_ok_and(|pair| pair.0 == *self))
-                        || (blocks[0].shape == Shape::DottedParenthesized
+                        || (blocks[0].shape == Shape::DottedCurlyQuoted
                             && blocks[0].head() == Some(&Head(self.clone())))) =>
             {
                 Ok(())
@@ -641,12 +564,12 @@ impl ShapeDefined for Text {
     type Selection = TextSelection;
 
     fn shapes() -> &'static [Shape] {
-        &[Shape::Bare, Shape::Parenthesized, Shape::CurlyQuoted]
+        &[Shape::Bare, Shape::CurlyQuoted]
     }
 
     fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
-        // Plain String for now: both carriers select it. Meaning belongs later
-        // in structuredStringType.md under bead primary-xqb.8.5.
+        // Plain String uses curly quotes. Parenthesis-delimited Meaning remains
+        // unimplemented.
         (head.is_none() && Self::shapes().contains(&shape)).then_some(TextSelection::Plain)
     }
 }
@@ -657,7 +580,6 @@ impl ShapeDefined for Entry {
     fn shapes() -> &'static [Shape] {
         &[
             Shape::Bare,
-            Shape::DottedParenthesized,
             Shape::DottedCurlyQuoted,
             Shape::DottedBraced,
             Shape::DottedSquareBracketed,
@@ -667,9 +589,7 @@ impl ShapeDefined for Entry {
     fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
         match (shape, head) {
             (Shape::Bare, None) => Some(EntrySelection::BareNote),
-            (Shape::DottedParenthesized | Shape::DottedCurlyQuoted, Some(value))
-                if value == &Head("Note".into()) =>
-            {
+            (Shape::DottedCurlyQuoted, Some(value)) if value == &Head("Note".into()) => {
                 Some(EntrySelection::Note)
             }
             (Shape::DottedBraced, Some(value)) if value == &Head("Group".into()) => {
@@ -771,19 +691,13 @@ impl ShapeDefined for OptionalText {
     type Selection = OptionalSelection;
 
     fn shapes() -> &'static [Shape] {
-        &[
-            Shape::Bare,
-            Shape::DottedParenthesized,
-            Shape::DottedCurlyQuoted,
-        ]
+        &[Shape::Bare, Shape::DottedCurlyQuoted]
     }
 
     fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
         match (shape, head) {
             (Shape::Bare, None) => Some(OptionalSelection::Bare),
-            (Shape::DottedParenthesized | Shape::DottedCurlyQuoted, Some(value))
-                if value == &Head("Some".into()) =>
-            {
+            (Shape::DottedCurlyQuoted, Some(value)) if value == &Head("Some".into()) => {
                 Some(OptionalSelection::Some)
             }
             _ => None,
@@ -803,7 +717,7 @@ impl DatomRealizing for Text {
                 problem: DatomProblem::Shape,
             });
         };
-        Ok(Self(carrier.text()))
+        Ok(Self(carrier.textual_body().to_owned()))
     }
 }
 
@@ -815,8 +729,8 @@ impl DatomTextualizing for Text {
                 Ok(())
             })
         } else {
-            scope.textualize_block(Shape::Parenthesized, None, |body| {
-                body.emit_scalar(&self.parenthesized_body());
+            scope.textualize_block(Shape::CurlyQuoted, None, |body| {
+                body.emit_scalar(&self.0);
                 Ok(())
             })
         }
@@ -944,7 +858,7 @@ impl DatomRealizing for TextMapEntry {
                 key.text_key(&value)?;
                 Ok(Self { key, value })
             }
-            Shape::DottedParenthesized | Shape::DottedCurlyQuoted => {
+            Shape::DottedCurlyQuoted => {
                 let Some(head) = block.head() else {
                     return Err(DatomFault {
                         problem: DatomProblem::Head,
@@ -956,7 +870,7 @@ impl DatomRealizing for TextMapEntry {
                         problem: DatomProblem::Shape,
                     });
                 };
-                let value = Text(carrier.text());
+                let value = Text(carrier.textual_body().to_owned());
                 key.text_key(&value)?;
                 Ok(Self { key, value })
             }
@@ -977,8 +891,8 @@ impl DatomTextualizing for TextMapEntry {
             });
         }
         let head = Head(self.key.clone());
-        scope.textualize_block(Shape::DottedParenthesized, Some(&head), |body| {
-            body.emit_scalar(&self.value.parenthesized_body());
+        scope.textualize_block(Shape::DottedCurlyQuoted, Some(&head), |body| {
+            body.emit_scalar(&self.value.0);
             Ok(())
         })
     }
@@ -1080,7 +994,7 @@ impl DatomRealizing for Entry {
                         problem: DatomProblem::Shape,
                     });
                 };
-                Ok(Self::Note(Text(carrier.text())))
+                Ok(Self::Note(Text(carrier.textual_body().to_owned())))
             }
             EntrySelection::BareNote => {
                 let (head, text) = block.divide()?;
@@ -1123,8 +1037,8 @@ impl DatomTextualizing for Entry {
                     });
                 }
                 let head = Head("Note".into());
-                scope.textualize_block(Shape::DottedParenthesized, Some(&head), |body| {
-                    body.emit_scalar(&text.parenthesized_body());
+                scope.textualize_block(Shape::DottedCurlyQuoted, Some(&head), |body| {
+                    body.emit_scalar(&text.0);
                     Ok(())
                 })
             }
@@ -1179,7 +1093,7 @@ impl DatomRealizing for OptionalText {
                     });
                 };
                 Ok(Self {
-                    value: Some(Text(carrier.text())),
+                    value: Some(Text(carrier.textual_body().to_owned())),
                 })
             }
         }
@@ -1202,8 +1116,8 @@ impl DatomTextualizing for OptionalText {
                     });
                 }
                 let head = Head("Some".into());
-                scope.textualize_block(Shape::DottedParenthesized, Some(&head), |body| {
-                    body.emit_scalar(&text.parenthesized_body());
+                scope.textualize_block(Shape::DottedCurlyQuoted, Some(&head), |body| {
+                    body.emit_scalar(&text.0);
                     Ok(())
                 })
             }

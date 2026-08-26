@@ -27,18 +27,15 @@ only context-sensitive typed realization and textual projection.
 - Records read and write field positions only. Variants carry their Head;
   their payload is headless in its own context.
 - Strings project bare exactly when the Protos scanner can carry the complete
-  value as one bare block; otherwise they use parenthesis. Curly quotes are
-  accepted as the legacy input carrier. Parenthesis projection preserves a
-  trailing backslash, literal escaped parentheses, and balanced nested pairs.
-  Meaning remains deferred to
-  `structuredStringType.md` and bead `primary-xqb.8.5`.
+  value as one bare block; otherwise they use curly quotes. A curly-quoted
+  String block keeps its interior opaque to structural delimiters. Parentheses
+  are reserved for the still-unimplemented structured String, Meaning.
 - `«north.[…]»` carries a keyed vector entry with one structural Protos frame.
   `«kind.core»` carries the existing bare pair form. Keys containing dots,
   and delimited keys followed by `.`, are deliberately unsupported pending a
   psyche ruling; they return a Datom fault rather than changing Protos.
 
-Canonical text is a block projection, not preservation of original whitespace
-or the legacy curly carrier spelling.
+Canonical text is a block projection, not preservation of original whitespace.
 
 ## Consumer-defined root
 

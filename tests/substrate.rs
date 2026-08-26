@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use datom::{
     DatomProblem, Entry, EvidenceObserving, EvidencedRealizing, EvidencedTextualizing, Group,
-    InterimNote, InterimNoteText, ProjectionViewing, RealizationViewing, Report, ReportText, Text,
+    InterimNoteText, ProjectionViewing, RealizationViewing, Report, ReportText, Text,
 };
 use protos::{
     FrameObserving, ObservationViewing, ParentObserving, Realize, SourceSlicing, SourceText,
@@ -13,26 +13,26 @@ const DEEP: &str = r#"{
   Q3
   «
     north.[
-      Note.(quick note)
+      Note.“quick note”
       Group.{
         Ops
-        [ Note.(sub note)
+        [ Note.“sub note”
           Group.{
-            (Deep } ] “quote)
+            “Deep } ] (quote)”
             [ Note.tail ]
-            « remark.(child sees } ] and (nested markup) only as text) » }
+            « remark.“child sees } ] and (nested markup) only as text” » }
           ]
           « kind.core » }
       Tags.[ alpha beta ] ]
   »
-  Some.(inside } ] “current context) }
+  Some.“inside } ] (current context” }
 "#;
 
 const CARRIERS: &str = r#"{
-  (a plain string)
-  (nested (balanced) parentheses are content — the seed of markup)
-  (a lone unbalanced one is escaped \( like this)
-  “legacy carrier still accepted”
+  “a plain string”
+  “parentheses are ordinary plain String content”
+  “string blocks ignore } ] and ( structural delimiters”
+  “the default delimited String carrier”
 }
 "#;
 
@@ -56,7 +56,7 @@ fn deep_ruled_fixture_uses_protos_scopes_and_is_canonically_stable() {
     let Entry::Group(deep) = &group.children[1] else {
         panic!("nested child is Group");
     };
-    assert_eq!(deep.title, Text("Deep } ] “quote".into()));
+    assert_eq!(deep.title, Text("Deep } ] (quote)".into()));
     assert_eq!(deep.children, vec![Entry::Note(Text("tail".into()))]);
     assert_eq!(
         deep.annotations.get("remark"),
@@ -74,7 +74,7 @@ fn deep_ruled_fixture_uses_protos_scopes_and_is_canonically_stable() {
     );
     assert_eq!(
         report.latest.as_ref().expect("Some").0,
-        "inside } ] “current context"
+        "inside } ] (current context"
     );
 
     let canonical = report.textualize().expect("canonical projection");
@@ -184,27 +184,31 @@ fn deep_ruled_fixture_uses_protos_scopes_and_is_canonically_stable() {
 }
 
 #[test]
-fn interim_note_accepts_both_carriers_and_reescapes_unbalanced_parentheses() {
+fn plain_string_uses_curly_quotes_and_keeps_its_interior_opaque() {
     let source = InterimNoteText {
         source: SourceText(CARRIERS.into()),
     };
     let note = source.realize().expect("carrier fixture realizes");
     assert_eq!(note.a, "a plain string");
+    assert_eq!(note.b, "parentheses are ordinary plain String content");
     assert_eq!(
-        note.b,
-        "nested (balanced) parentheses are content — the seed of markup"
+        note.c,
+        "string blocks ignore } ] and ( structural delimiters"
     );
-    assert_eq!(note.c, "a lone unbalanced one is escaped ( like this");
-    assert_eq!(note.d, "legacy carrier still accepted");
+    assert_eq!(note.d, "the default delimited String carrier");
 
     let canonical = note.textualize().expect("carrier projection");
-    assert!(canonical.source.0.contains(r"\("));
-    assert!(!canonical.source.0.contains('“'));
+    assert_eq!(
+        canonical.source,
+        SourceText(
+            "{“a plain string” “parentheses are ordinary plain String content” “string blocks ignore } ] and ( structural delimiters” “the default delimited String carrier”}".into(),
+        )
+    );
     assert_eq!(canonical.realize().expect("canonical carrier source"), note);
 }
 
 #[test]
-fn headed_legacy_curly_carriers_are_contextual_input_only() {
+fn headed_delimited_strings_are_canonically_curly_quoted() {
     let bare = ReportText {
         source: SourceText(
             "{ Q3 « north.[ Note.“legacy” Group.{ Ops [] « remark.“legacy” » } ] » Some.“legacy” }"
@@ -226,7 +230,6 @@ fn headed_legacy_curly_carriers_are_contextual_input_only() {
     assert!(canonical.source.0.contains("Note.legacy"));
     assert!(canonical.source.0.contains("remark.legacy"));
     assert!(canonical.source.0.contains("Some.legacy"));
-    assert!(!canonical.source.0.contains('“'));
 
     let delimited = ReportText {
         source: SourceText(
@@ -238,11 +241,10 @@ fn headed_legacy_curly_carriers_are_contextual_input_only() {
         .realize()
         .expect("delimited headed legacy carriers realize")
         .textualize()
-        .expect("parenthesis canonical headed text");
-    assert!(canonical.source.0.contains("Note.(legacy } ])"));
-    assert!(canonical.source.0.contains("remark.(legacy } ])"));
-    assert!(canonical.source.0.contains("Some.(legacy } ])"));
-    assert!(!canonical.source.0.contains('“'));
+        .expect("curly canonical headed text");
+    assert!(canonical.source.0.contains("Note.“legacy } ]”"));
+    assert!(canonical.source.0.contains("remark.“legacy } ]”"));
+    assert!(canonical.source.0.contains("Some.“legacy } ]”"));
 }
 
 #[test]
@@ -264,7 +266,7 @@ fn optional_bare_and_delimited_forms_are_canonical_and_stable() {
     let delimited_text = delimited
         .textualize()
         .expect("delimited optional projection");
-    assert!(delimited_text.source.0.contains("Some.(inside } ])"));
+    assert!(delimited_text.source.0.contains("Some.“inside } ]”"));
     assert_eq!(
         delimited_text.realize().expect("delimited optional input"),
         delimited
@@ -272,18 +274,16 @@ fn optional_bare_and_delimited_forms_are_canonical_and_stable() {
 }
 
 #[test]
-fn parenthesis_projection_preserves_escapes_and_trailing_backslash() {
-    let note = InterimNote {
-        a: "trailing \\".into(),
-        b: "literal \\( and \\)".into(),
-        c: "nested (balanced) parentheses".into(),
-        d: "a lone ( stays literal".into(),
-    };
-    let projected = note.textualize().expect("projection");
-    assert!(projected.source.0.contains(r"\\"));
-    assert!(projected.source.0.contains(r"\("));
-    assert!(projected.source.0.contains(r"\)"));
-    assert_eq!(projected.realize().expect("escaped carrier input"), note);
+fn parenthesized_plain_strings_are_not_realized_as_datom_text() {
+    assert_eq!(
+        InterimNoteText {
+            source: SourceText("{ (a) b c d }".into()),
+        }
+        .realize(),
+        Err(datom::DatomFault {
+            problem: DatomProblem::Shape,
+        })
+    );
 }
 
 #[test]
@@ -370,7 +370,7 @@ fn map_key_duplicate_and_record_arity_fail_without_new_grammar() {
 #[test]
 fn direct_scalar_fields_reject_unrecognized_heads() {
     let report = ReportText {
-        source: SourceText("{ Wrong.(oops) « » None }".into()),
+        source: SourceText("{ Wrong.“oops” « » None }".into()),
     };
     assert_eq!(
         report.realize(),
@@ -379,7 +379,7 @@ fn direct_scalar_fields_reject_unrecognized_heads() {
         })
     );
     let interim = InterimNoteText {
-        source: SourceText("{ Wrong.(a) b c d }".into()),
+        source: SourceText("{ Wrong.“a” b c d }".into()),
     };
     assert_eq!(
         interim.realize(),
