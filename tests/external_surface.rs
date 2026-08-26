@@ -25,7 +25,8 @@ struct Serve {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RequestSelection {
-    Request,
+    Serve,
+    Inspect,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -41,8 +42,15 @@ impl ShapeDefined for Request {
     }
 
     fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
-        (shape == Shape::DottedBraced && head == Some(&Head("Request".into())))
-            .then_some(RequestSelection::Request)
+        match (shape, head) {
+            (Shape::DottedBraced, Some(head)) if head == &Head("Serve".into()) => {
+                Some(RequestSelection::Serve)
+            }
+            (Shape::DottedBraced, Some(head)) if head == &Head("Inspect".into()) => {
+                Some(RequestSelection::Inspect)
+            }
+            _ => None,
+        }
     }
 }
 
@@ -61,20 +69,12 @@ impl ShapeDefined for Serve {
 
 impl DatomRealizing for Request {
     fn realize_block(scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
-        if Self::select(block.shape, block.head()).is_none() {
-            return Err(DatomFault {
-                problem: DatomProblem::Shape,
-            });
-        }
-        let mut values = scope.realize_body(&mut |child_scope, child| match (
-            child.shape,
-            child.head(),
-        ) {
-            (Shape::DottedBraced, Some(head)) if head == &Head("Serve".into()) => {
-                Ok(Self::Serve(Serve::realize_block(child_scope, child)?))
-            }
-            (Shape::DottedBraced, Some(head)) if head == &Head("Inspect".into()) => {
-                let mut paths = child_scope.realize_body(&mut |path_scope, path| {
+        match Self::select(block.shape, block.head()).ok_or(DatomFault {
+            problem: DatomProblem::Shape,
+        })? {
+            RequestSelection::Serve => Ok(Self::Serve(Serve::realize_block(scope, block)?)),
+            RequestSelection::Inspect => {
+                let mut paths = scope.realize_body(&mut |path_scope, path| {
                     PathBuf::realize_block(path_scope, path)
                 })?;
                 if paths.len() != 1 {
@@ -84,16 +84,7 @@ impl DatomRealizing for Request {
                 }
                 Ok(Self::Inspect(paths.remove(0)))
             }
-            _ => Err(DatomFault {
-                problem: DatomProblem::Shape,
-            }),
-        })?;
-        if values.len() != 1 {
-            return Err(DatomFault {
-                problem: DatomProblem::Position,
-            });
         }
-        Ok(values.remove(0))
     }
 }
 
@@ -173,16 +164,12 @@ impl DatomTextualizing for Serve {
     }
 }
 
-impl DatomRoot for Request {
-    fn root_head() -> Head {
-        Head("Request".into())
-    }
-}
+impl DatomRoot for Request {}
 
 #[test]
 fn external_request_realizes_and_textualizes_through_datom() {
     let source = SourceText(
-        "Request.{ Serve.{ true curriculum-deploy [ /etc/curriculum /srv/runtime ] Map.[ source.[ local ] mode.[ fast ] ] } }".into(),
+        "Serve.{ true curriculum-deploy [ /etc/curriculum /srv/runtime ] « source.[ local ] mode.[ fast ] » }".into(),
     );
     let text = DatomText::<Request>::from(source.clone());
     let request = text.realize().expect("external request realizes");
@@ -208,7 +195,7 @@ fn external_request_realizes_and_textualizes_through_datom() {
     assert_eq!(
         canonical,
         SourceText(
-            "Request.{Serve.{true curriculum-deploy [/etc/curriculum /srv/runtime] Map.[mode.[fast] source.[local]]}}".into(),
+            "Serve.{true curriculum-deploy [/etc/curriculum /srv/runtime] «mode.[fast] source.[local]»}".into(),
         )
     );
     assert_eq!(
@@ -224,7 +211,7 @@ fn external_request_realizes_and_textualizes_through_datom() {
         .expect("inspect request projection");
     assert_eq!(
         canonical,
-        SourceText("Request.{Inspect.{/var/lib/curriculum}}".into())
+        SourceText("Inspect.{/var/lib/curriculum}".into())
     );
     assert_eq!(
         DatomText::<Request>::from(canonical)

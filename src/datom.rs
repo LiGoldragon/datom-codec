@@ -259,14 +259,12 @@ pub trait DatomTextualizing {
     fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault>;
 }
 
-/// A top-level, headed Datom enum whose text is `Head.{ variant }`.
+/// A top-level Datom value whose expected type selects its root shape.
 ///
 /// The default operations start the only Protos walk used for a document. Child
 /// records and variants stay inside the scopes supplied by `DatomRealizing` and
 /// `DatomTextualizing`, so a consumer never needs a runtime-local parser.
 pub trait DatomRoot: DatomRealizing + DatomTextualizing {
-    fn root_head() -> Head;
-
     fn realize_source(source: &SourceText) -> Result<Self, DatomFault> {
         let mut walk = RealizeWalk::default();
         let mut values =
@@ -281,12 +279,7 @@ pub trait DatomRoot: DatomRealizing + DatomTextualizing {
 
     fn textualize_source(&self) -> Result<SourceText, DatomFault> {
         let mut walk = TextualizeWalk::default();
-        let head = Self::root_head();
-        walk.textualize_source(|scope| {
-            scope.textualize_block(Shape::DottedBraced, Some(&head), |body| {
-                self.textualize_in(body)
-            })
-        })?;
+        walk.textualize_source(|scope| self.textualize_in(scope))?;
         Ok(walk.textual_source())
     }
 }
@@ -393,8 +386,7 @@ impl<T: DatomTextualizing> DatomTextualizing for Vec<T> {
 
 impl<T: DatomRealizing> DatomRealizing for BTreeMap<String, T> {
     fn realize_block(scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
-        if block.shape != Shape::DottedSquareBracketed || block.head() != Some(&Head("Map".into()))
-        {
+        if block.shape != Shape::Guillemeted || block.head().is_some() {
             return Err(DatomFault {
                 problem: DatomProblem::Shape,
             });
@@ -438,8 +430,7 @@ impl<T: DatomRealizing> DatomRealizing for BTreeMap<String, T> {
 
 impl<T: DatomTextualizing> DatomTextualizing for BTreeMap<String, T> {
     fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
-        let map = Head("Map".into());
-        scope.textualize_block(Shape::DottedSquareBracketed, Some(&map), |body| {
+        scope.textualize_block(Shape::Guillemeted, None, |body| {
             for (key, value) in self {
                 key.group_key()?;
                 let entry = Head(key.clone());
@@ -732,12 +723,11 @@ impl ShapeDefined for GroupMap {
     type Selection = MapSelection;
 
     fn shapes() -> &'static [Shape] {
-        &[Shape::DottedSquareBracketed]
+        &[Shape::Guillemeted]
     }
 
     fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
-        (shape == Shape::DottedSquareBracketed && head == Some(&Head("Map".into())))
-            .then_some(MapSelection::Entries)
+        (shape == Shape::Guillemeted && head.is_none()).then_some(MapSelection::Entries)
     }
 }
 
@@ -745,12 +735,11 @@ impl ShapeDefined for TextMap {
     type Selection = MapSelection;
 
     fn shapes() -> &'static [Shape] {
-        &[Shape::DottedSquareBracketed]
+        &[Shape::Guillemeted]
     }
 
     fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
-        (shape == Shape::DottedSquareBracketed && head == Some(&Head("Map".into())))
-            .then_some(MapSelection::Entries)
+        (shape == Shape::Guillemeted && head.is_none()).then_some(MapSelection::Entries)
     }
 }
 
@@ -758,11 +747,11 @@ impl ShapeDefined for Report {
     type Selection = ();
 
     fn shapes() -> &'static [Shape] {
-        &[Shape::DottedBraced]
+        &[Shape::Braced]
     }
 
     fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
-        (shape == Shape::DottedBraced && head == Some(&Head("Report".into()))).then_some(())
+        (shape == Shape::Braced && head.is_none()).then_some(())
     }
 }
 
@@ -770,11 +759,11 @@ impl ShapeDefined for InterimNote {
     type Selection = ();
 
     fn shapes() -> &'static [Shape] {
-        &[Shape::DottedBraced]
+        &[Shape::Braced]
     }
 
     fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
-        (shape == Shape::DottedBraced && head == Some(&Head("InterimNote".into()))).then_some(())
+        (shape == Shape::Braced && head.is_none()).then_some(())
     }
 }
 
@@ -934,8 +923,7 @@ impl DatomTextualizing for GroupMap {
         for key in self.value.keys() {
             key.group_key()?;
         }
-        let map = Head("Map".into());
-        scope.textualize_block(Shape::DottedSquareBracketed, Some(&map), |body| {
+        scope.textualize_block(Shape::Guillemeted, None, |body| {
             for (key, value) in &self.value {
                 GroupMapEntry {
                     key: key.clone(),
@@ -1023,8 +1011,7 @@ impl DatomTextualizing for TextMap {
         for (key, value) in &self.value {
             key.text_key(value)?;
         }
-        let map = Head("Map".into());
-        scope.textualize_block(Shape::DottedSquareBracketed, Some(&map), |body| {
+        scope.textualize_block(Shape::Guillemeted, None, |body| {
             for (key, value) in &self.value {
                 TextMapEntry {
                     key: key.clone(),
@@ -1317,17 +1304,9 @@ impl DatomTextualizing for InterimNote {
     }
 }
 
-impl DatomRoot for Report {
-    fn root_head() -> Head {
-        Head("Report".into())
-    }
-}
+impl DatomRoot for Report {}
 
-impl DatomRoot for InterimNote {
-    fn root_head() -> Head {
-        Head("InterimNote".into())
-    }
-}
+impl DatomRoot for InterimNote {}
 
 impl EvidencedRealizing for ReportText {
     type Value = Report;
@@ -1380,11 +1359,8 @@ impl EvidencedTextualizing for Report {
 
     fn textualize_evidenced(&self) -> Result<Projected<Self::Text>, DatomFault> {
         let mut walk = TextualizeWalk::default();
-        let head = Head("Report".into());
         let result: Result<(), DatomFault> = walk.textualize_source(|scope| {
-            scope.textualize_block(Shape::DottedBraced, Some(&head), |body| {
-                self.textualize_in(body)
-            })
+            scope.textualize_block(Shape::Braced, None, |body| self.textualize_in(body))
         });
         result.map(|()| Projected {
             text: ReportText {
@@ -1403,11 +1379,8 @@ impl EvidencedTextualizing for InterimNote {
 
     fn textualize_evidenced(&self) -> Result<Projected<Self::Text>, DatomFault> {
         let mut walk = TextualizeWalk::default();
-        let head = Head("InterimNote".into());
         let result: Result<(), DatomFault> = walk.textualize_source(|scope| {
-            scope.textualize_block(Shape::DottedBraced, Some(&head), |body| {
-                self.textualize_in(body)
-            })
+            scope.textualize_block(Shape::Braced, None, |body| self.textualize_in(body))
         });
         result.map(|()| Projected {
             text: InterimNoteText {

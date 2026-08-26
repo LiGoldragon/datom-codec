@@ -15,12 +15,12 @@ only context-sensitive typed realization and textual projection.
 - `DatomText<T>` is the public typed textual carrier for a consumer-defined
   `DatomRoot`. `DatomRealizing` and `DatomTextualizing` are the scoped schema
   seams for its variants and positional records; `DatomRoot` starts the one
-  document walk and provides canonical `textualize_source` projection.
+  document walk and lets the expected root type select its own syntax.
 - `String`, `bool`, `PathBuf`, `Vec<T>`, and `BTreeMap<String, T>` implement
   those seams. Booleans project as bare `true` or `false`; paths use Datom's
   ordinary string carrier and reject non-Unicode host paths. Vectors are
-  headless square blocks. Generic maps project as `Map.[key.[value]]`, one
-  value per key; concrete `Report` keeps its established map spellings.
+  headless square blocks. Generic maps project as `«key.[value]»`, one value
+  per key; their schema-owned entry forms remain unchanged.
 - `EvidencedRealizing` and `EvidencedTextualizing` return those same typed
   values/texts paired with read-only transition evidence copied from the
   actual Protos driver; dialect code never owns or proxies `Walk`.
@@ -32,8 +32,8 @@ only context-sensitive typed realization and textual projection.
   trailing backslash, literal escaped parentheses, and balanced nested pairs.
   Meaning remains deferred to
   `structuredStringType.md` and bead `primary-xqb.8.5`.
-- `Map.[north.[…]]` is a keyed vector entry with one structural Protos frame.
-  Plain `Map.[kind.core]` is an unambiguous bare pair. Keys containing dots,
+- `«north.[…]»` carries a keyed vector entry with one structural Protos frame.
+  `«kind.core»` carries the existing bare pair form. Keys containing dots,
   and delimited keys followed by `.`, are deliberately unsupported pending a
   psyche ruling; they return a Datom fault rather than changing Protos.
 
@@ -42,9 +42,10 @@ or the legacy curly carrier spelling.
 
 ## Consumer-defined root
 
-An external program defines its own root enum and positional configuration
+An external program defines its own root type and positional configuration
 records, implements `DatomRealizing` and `DatomTextualizing` for each, and
-implements `DatomRoot` on the root enum. It reads with
+implements `DatomRoot` on the root type. An enum root reads and writes its
+variant directly; a non-enum root reads and writes its own selected shape. It reads with
 `DatomText::<Request>::from(SourceText(input.into())).realize()` and writes
 with `request.textualize_source()`. The supplied scopes are the only recursive
 entry point: do not construct a Protos walk or parser inside the program.

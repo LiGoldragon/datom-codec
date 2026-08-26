@@ -9,9 +9,9 @@ use protos::{
     Textualize, TransitionObserving, WalkTransitionKind,
 };
 
-const DEEP: &str = r#"Report.{
+const DEEP: &str = r#"{
   Q3
-  Map.[
+  «
     north.[
       Note.(quick note)
       Group.{
@@ -20,14 +20,15 @@ const DEEP: &str = r#"Report.{
           Group.{
             (Deep } ] “quote)
             [ Note.tail ]
-            Map.[ remark.(child sees } ] and (nested markup) only as text) ] }
+            « remark.(child sees } ] and (nested markup) only as text) » }
           ]
-          Map.[ kind.core ] }
-      Tags.[ alpha beta ] ] ]
+          « kind.core » }
+      Tags.[ alpha beta ] ]
+  »
   Some.(inside } ] “current context) }
 "#;
 
-const CARRIERS: &str = r#"InterimNote.{
+const CARRIERS: &str = r#"{
   (a plain string)
   (nested (balanced) parentheses are content — the seed of markup)
   (a lone unbalanced one is escaped \( like this)
@@ -206,7 +207,7 @@ fn interim_note_accepts_both_carriers_and_reescapes_unbalanced_parentheses() {
 fn headed_legacy_curly_carriers_are_contextual_input_only() {
     let bare = ReportText {
         source: SourceText(
-            "Report.{ Q3 Map.[ north.[ Note.“legacy” Group.{ Ops [] Map.[ remark.“legacy”] } ] ] Some.“legacy” }"
+            "{ Q3 « north.[ Note.“legacy” Group.{ Ops [] « remark.“legacy” » } ] » Some.“legacy” }"
                 .into(),
         ),
     };
@@ -229,7 +230,7 @@ fn headed_legacy_curly_carriers_are_contextual_input_only() {
 
     let delimited = ReportText {
         source: SourceText(
-            "Report.{ Q3 Map.[ north.[ Note.“legacy } ]” Group.{ Ops [] Map.[ remark.“legacy } ]”] } ] ] Some.“legacy } ]” }"
+            "{ Q3 « north.[ Note.“legacy } ]” Group.{ Ops [] « remark.“legacy } ]” » } ] » Some.“legacy } ]” }"
                 .into(),
         ),
     };
@@ -337,9 +338,7 @@ fn map_key_duplicate_and_record_arity_fail_without_new_grammar() {
     );
 
     let duplicate = ReportText {
-        source: SourceText(
-            "Report.{ Q3 Map.[ north.[ Note.one ] north.[ Note.two ] ] None }".into(),
-        ),
+        source: SourceText("{ Q3 « north.[ Note.one ] north.[ Note.two ] » None }".into()),
     };
     assert_eq!(
         duplicate.realize(),
@@ -348,7 +347,7 @@ fn map_key_duplicate_and_record_arity_fail_without_new_grammar() {
         })
     );
     let missing = ReportText {
-        source: SourceText("Report.{ Q3 Map.[] }".into()),
+        source: SourceText("{ Q3 « » }".into()),
     };
     assert_eq!(
         missing.realize(),
@@ -358,9 +357,7 @@ fn map_key_duplicate_and_record_arity_fail_without_new_grammar() {
     );
 
     let wrong_vector = ReportText {
-        source: SourceText(
-            "Report.{ Q3 Map.[ north.[ Group.{ Ops Wrong.[ Note.one ] Map.[] } ] ] None }".into(),
-        ),
+        source: SourceText("{ Q3 « north.[ Group.{ Ops Wrong.[ Note.one ] « » } ] » None }".into()),
     };
     assert_eq!(
         wrong_vector.realize(),
@@ -373,7 +370,7 @@ fn map_key_duplicate_and_record_arity_fail_without_new_grammar() {
 #[test]
 fn direct_scalar_fields_reject_unrecognized_heads() {
     let report = ReportText {
-        source: SourceText("Report.{ Wrong.(oops) Map.[] None }".into()),
+        source: SourceText("{ Wrong.(oops) « » None }".into()),
     };
     assert_eq!(
         report.realize(),
@@ -382,7 +379,7 @@ fn direct_scalar_fields_reject_unrecognized_heads() {
         })
     );
     let interim = InterimNoteText {
-        source: SourceText("InterimNote.{ Wrong.(a) b c d }".into()),
+        source: SourceText("{ Wrong.(a) b c d }".into()),
     };
     assert_eq!(
         interim.realize(),
