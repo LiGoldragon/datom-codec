@@ -6,7 +6,7 @@
 mod datom;
 
 pub use datom::{
-    DatomEvidence, DatomFault, DatomProblem, DatomRealizing, DatomRoot, DatomText,
+    DatomEvidence, DatomFault, DatomHeadedUnit, DatomProblem, DatomRealizing, DatomRoot, DatomText,
     DatomTextualizing, Entry, EvidenceObserving, EvidencedRealizing, EvidencedTextualizing, Group,
     InterimNote, InterimNoteText, PositionAdvancing, Projected, ProjectionViewing,
     RealizationViewing, Realized, RecordPosition, Report, ReportText, TagList, Text,

@@ -1,5 +1,20 @@
 # Upgrades
 
+## 0.5.0
+
+Datom now depends on Protos 0.8.0, whose public `Shape` has a new
+`DottedBare` case for headed units such as `Observe.Locks`; update exhaustive
+`Shape` matches in consumers.
+
+`i64` now implements the Datom scalar seams. Its accepted and canonical form
+is bare ASCII decimal: `0`, positive digits without a leading zero, or `-`
+followed by positive digits; values outside the `i64` range, `+`, `-0`, and
+leading zeroes are faults.
+
+`DatomHeadedUnit` is the public composition seam for a payloadless enum that
+projects as `Head.Unit`. Implement it together with `DatomRoot` for root
+families such as `Observe.Locks`; it replaces no existing schema form.
+
 ## 0.4.0
 
 Plain Strings no longer accept or project parenthesis-delimited text. Replace

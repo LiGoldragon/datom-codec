@@ -12,6 +12,12 @@ root starts with its selected variant; a non-enum root has no variant Head.
 position and variants own their Head. This leaves structural lifecycle and
 lexical parsing outside both the consumer and the dialect schema.
 
-The reusable scalar/container surface is `String`, `bool`, `PathBuf`,
-`Vec<T>`, and `BTreeMap<String, T>`. Maps are headless guillemet blocks; their
+The reusable scalar/container surface is `String`, `bool`, `i64`, `PathBuf`,
+`Vec<T>`, and `BTreeMap<String, T>`. `i64` is canonical bare decimal and
+range-checked during realization. Maps are headless guillemet blocks; their
 entries retain the schema-owned forms already used for one value under a key.
+
+`DatomHeadedUnit` realizes and textualizes a payloadless enum unit as a
+headed bare block (`Head.Unit`). It is the type-directed composition for
+families such as `Observe.Locks` and `Observe.ExpiredLocks`; Protos supplies
+the head/body structure, while Datom selects the unit in the expected enum.

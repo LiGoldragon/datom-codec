@@ -1,6 +1,6 @@
 [package]
 name        = "datom"
-version     = "0.4.0"
+version     = "0.5.0"
 edition     = "2024"
 rust-version = "1.85"
 license     = "MIT OR Apache-2.0"
@@ -9,7 +9,7 @@ description = "Datom text serialization and deserialization."
 publish     = false
 
 [dependencies]
-protos = { git = "https://github.com/LiGoldragon/protos", rev = "1e0890175319" }
+protos = { git = "https://github.com/LiGoldragon/protos", rev = "3b190f9fc2c2a074ceeb6ababfea89e3dd504996" }
 
 [lib]
 name = "datom"

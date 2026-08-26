@@ -259,6 +259,18 @@ pub trait DatomTextualizing {
     fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault>;
 }
 
+/// The Datom enum seam for a head and its selected payloadless unit.
+///
+/// Implement this on a unit-only enum, then implement `DatomRoot` to use it
+/// as a document root. The type projects `Head.Unit`, such as
+/// `Observe.Locks`; future units select through the same head without adding
+/// a new dialect syntax form.
+pub trait DatomHeadedUnit: Sized {
+    fn head() -> &'static str;
+    fn select_unit(unit: &str) -> Option<Self>;
+    fn unit(&self) -> &'static str;
+}
+
 /// A top-level Datom value whose expected type selects its root shape.
 ///
 /// The default operations start the only Protos walk used for a document. Child
@@ -321,6 +333,44 @@ impl DatomTextualizing for String {
     }
 }
 
+trait CanonicalInteger {
+    fn canonical_i64(&self) -> Option<i64>;
+}
+
+impl CanonicalInteger for str {
+    fn canonical_i64(&self) -> Option<i64> {
+        let valid = match self.as_bytes() {
+            [b'0'] => true,
+            [b'1'..=b'9', rest @ ..] => rest.iter().all(u8::is_ascii_digit),
+            [b'-', b'1'..=b'9', rest @ ..] => rest.iter().all(u8::is_ascii_digit),
+            _ => false,
+        };
+        valid.then(|| self.parse().ok()).flatten()
+    }
+}
+
+impl DatomRealizing for i64 {
+    fn realize_block(_: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
+        if block.shape != Shape::Bare || block.head().is_some() {
+            return Err(DatomFault {
+                problem: DatomProblem::Shape,
+            });
+        }
+        block.body.0.canonical_i64().ok_or(DatomFault {
+            problem: DatomProblem::Value,
+        })
+    }
+}
+
+impl DatomTextualizing for i64 {
+    fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
+        scope.textualize_block(Shape::Bare, None, |body| {
+            body.emit_scalar(&self.to_string());
+            Ok(())
+        })
+    }
+}
+
 impl DatomRealizing for bool {
     fn realize_block(_: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
         if block.shape != Shape::Bare || block.head().is_some() {
@@ -359,6 +409,29 @@ impl DatomTextualizing for PathBuf {
             problem: DatomProblem::Path,
         })?;
         path.to_owned().textualize_in(scope)
+    }
+}
+
+impl<T: DatomHeadedUnit> DatomRealizing for T {
+    fn realize_block(_: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
+        if block.shape != Shape::DottedBare || block.head() != Some(&Head(T::head().into())) {
+            return Err(DatomFault {
+                problem: DatomProblem::Shape,
+            });
+        }
+        T::select_unit(&block.body.0).ok_or(DatomFault {
+            problem: DatomProblem::Value,
+        })
+    }
+}
+
+impl<T: DatomHeadedUnit> DatomTextualizing for T {
+    fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
+        let head = Head(T::head().into());
+        scope.textualize_block(Shape::DottedBare, Some(&head), |body| {
+            body.emit_scalar(T::unit(self));
+            Ok(())
+        })
     }
 }
 
@@ -464,8 +537,11 @@ impl BareProjecting for Text {
             candidate.blocks(),
             Ok(blocks)
                 if blocks.len() == 1
-                    && blocks[0].shape == Shape::Bare
-                    && blocks[0].body.0 == self.0
+                    && matches!(blocks[0].shape, Shape::Bare | Shape::DottedBare)
+                    && blocks[0]
+                        .string_carrier
+                        .as_ref()
+                        .is_some_and(|carrier| carrier.textual_body() == self.0)
         )
     }
 }
@@ -525,7 +601,7 @@ impl MapKeyChecking for String {
         match candidate.blocks() {
             Ok(blocks)
                 if blocks.len() == 1
-                    && ((blocks[0].shape == Shape::Bare
+                    && ((matches!(blocks[0].shape, Shape::Bare | Shape::DottedBare)
                         && blocks[0].divide().is_ok_and(|pair| pair.0 == *self))
                         || (blocks[0].shape == Shape::DottedCurlyQuoted
                             && blocks[0].head() == Some(&Head(self.clone())))) =>
@@ -541,15 +617,25 @@ impl MapKeyChecking for String {
 
 impl PairDividing for Block {
     fn divide(&self) -> Result<(String, Text), DatomFault> {
-        if self.shape != Shape::Bare {
+        if !matches!(self.shape, Shape::Bare | Shape::DottedBare) {
             return Err(DatomFault {
                 problem: DatomProblem::AmbiguousMapPair,
             });
         }
-        let Some((key, value)) = self.body.0.split_once('.') else {
-            return Err(DatomFault {
+        let (key, value) = match self.shape {
+            Shape::Bare => self.body.0.split_once('.').ok_or(DatomFault {
                 problem: DatomProblem::AmbiguousMapPair,
-            });
+            })?,
+            Shape::DottedBare => (
+                self.head()
+                    .ok_or(DatomFault {
+                        problem: DatomProblem::AmbiguousMapPair,
+                    })?
+                    .0
+                    .as_str(),
+                self.body.0.as_str(),
+            ),
+            _ => unreachable!(),
         };
         if key.is_empty() || value.is_empty() || key.contains('.') {
             return Err(DatomFault {
@@ -564,13 +650,18 @@ impl ShapeDefined for Text {
     type Selection = TextSelection;
 
     fn shapes() -> &'static [Shape] {
-        &[Shape::Bare, Shape::CurlyQuoted]
+        &[Shape::Bare, Shape::DottedBare, Shape::CurlyQuoted]
     }
 
     fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
         // Plain String uses curly quotes. Parenthesis-delimited Meaning remains
         // unimplemented.
-        (head.is_none() && Self::shapes().contains(&shape)).then_some(TextSelection::Plain)
+        match (shape, head) {
+            (Shape::Bare | Shape::CurlyQuoted, None) | (Shape::DottedBare, Some(_)) => {
+                Some(TextSelection::Plain)
+            }
+            _ => None,
+        }
     }
 }
 
@@ -580,6 +671,7 @@ impl ShapeDefined for Entry {
     fn shapes() -> &'static [Shape] {
         &[
             Shape::Bare,
+            Shape::DottedBare,
             Shape::DottedCurlyQuoted,
             Shape::DottedBraced,
             Shape::DottedSquareBracketed,
@@ -588,7 +680,7 @@ impl ShapeDefined for Entry {
 
     fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
         match (shape, head) {
-            (Shape::Bare, None) => Some(EntrySelection::BareNote),
+            (Shape::Bare, None) | (Shape::DottedBare, Some(_)) => Some(EntrySelection::BareNote),
             (Shape::DottedCurlyQuoted, Some(value)) if value == &Head("Note".into()) => {
                 Some(EntrySelection::Note)
             }
@@ -691,12 +783,12 @@ impl ShapeDefined for OptionalText {
     type Selection = OptionalSelection;
 
     fn shapes() -> &'static [Shape] {
-        &[Shape::Bare, Shape::DottedCurlyQuoted]
+        &[Shape::Bare, Shape::DottedBare, Shape::DottedCurlyQuoted]
     }
 
     fn select(shape: Shape, head: Option<&Head>) -> Option<Self::Selection> {
         match (shape, head) {
-            (Shape::Bare, None) => Some(OptionalSelection::Bare),
+            (Shape::Bare, None) | (Shape::DottedBare, Some(_)) => Some(OptionalSelection::Bare),
             (Shape::DottedCurlyQuoted, Some(value)) if value == &Head("Some".into()) => {
                 Some(OptionalSelection::Some)
             }
@@ -853,7 +945,7 @@ impl DatomTextualizing for GroupMap {
 impl DatomRealizing for TextMapEntry {
     fn realize_block(_scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
         match block.shape {
-            Shape::Bare => {
+            Shape::Bare | Shape::DottedBare => {
                 let (key, value) = block.divide()?;
                 key.text_key(&value)?;
                 Ok(Self { key, value })

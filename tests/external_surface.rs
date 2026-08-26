@@ -1,8 +1,8 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use datom::{
-    DatomFault, DatomProblem, DatomRealizing, DatomRoot, DatomText, DatomTextualizing,
-    PositionAdvancing, RecordPosition,
+    DatomFault, DatomHeadedUnit, DatomProblem, DatomRealizing, DatomRoot, DatomText,
+    DatomTextualizing, PositionAdvancing, RecordPosition,
 };
 use protos::{
     Block, Head, Headed, Realize, RealizeScope, RealizeScoping, Shape, ShapeDefined, SourceText,
@@ -13,6 +13,15 @@ use protos::{
 enum Request {
     Serve(Serve),
     Inspect(PathBuf),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Integer(i64);
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum Observe {
+    Locks,
+    ExpiredLocks,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -166,6 +175,43 @@ impl DatomTextualizing for Serve {
 
 impl DatomRoot for Request {}
 
+impl DatomRealizing for Integer {
+    fn realize_block(scope: &mut RealizeScope<'_>, block: &Block) -> Result<Self, DatomFault> {
+        Ok(Self(i64::realize_block(scope, block)?))
+    }
+}
+
+impl DatomTextualizing for Integer {
+    fn textualize_in(&self, scope: &mut TextualizeScope<'_>) -> Result<(), DatomFault> {
+        self.0.textualize_in(scope)
+    }
+}
+
+impl DatomRoot for Integer {}
+
+impl DatomHeadedUnit for Observe {
+    fn head() -> &'static str {
+        "Observe"
+    }
+
+    fn select_unit(unit: &str) -> Option<Self> {
+        match unit {
+            "Locks" => Some(Self::Locks),
+            "ExpiredLocks" => Some(Self::ExpiredLocks),
+            _ => None,
+        }
+    }
+
+    fn unit(&self) -> &'static str {
+        match self {
+            Self::Locks => "Locks",
+            Self::ExpiredLocks => "ExpiredLocks",
+        }
+    }
+}
+
+impl DatomRoot for Observe {}
+
 #[test]
 fn external_request_realizes_and_textualizes_through_datom() {
     let source = SourceText(
@@ -218,5 +264,66 @@ fn external_request_realizes_and_textualizes_through_datom() {
             .realize()
             .expect("inspect request realizes"),
         inspect
+    );
+}
+
+#[test]
+fn integer_is_canonical_bare_decimal_i64() {
+    for (source, value) in [
+        ("0", 0),
+        ("42", 42),
+        ("-42", -42),
+        ("9223372036854775807", i64::MAX),
+        ("-9223372036854775808", i64::MIN),
+    ] {
+        let realized = DatomText::<Integer>::from(SourceText(source.into()))
+            .realize()
+            .expect("canonical integer realizes");
+        assert_eq!(realized, Integer(value));
+        assert_eq!(
+            realized
+                .textualize_source()
+                .expect("canonical integer projects"),
+            SourceText(source.into())
+        );
+    }
+
+    for source in [
+        "+1",
+        "01",
+        "-0",
+        "-01",
+        "1.0",
+        "٩",
+        "9223372036854775808",
+        "-9223372036854775809",
+    ] {
+        assert!(
+            DatomText::<Integer>::from(SourceText(source.into()))
+                .realize()
+                .is_err(),
+            "{source} is not canonical i64 text"
+        );
+    }
+}
+
+#[test]
+fn headed_unit_enum_projects_observe_locks_and_future_siblings() {
+    assert_eq!(
+        DatomText::<Observe>::from(SourceText("Observe.Locks".into()))
+            .realize()
+            .expect("Observe.Locks realizes"),
+        Observe::Locks
+    );
+    assert_eq!(
+        Observe::ExpiredLocks
+            .textualize_source()
+            .expect("future sibling projects"),
+        SourceText("Observe.ExpiredLocks".into())
+    );
+    assert!(
+        DatomText::<Observe>::from(SourceText("Observe.Unknown".into()))
+            .realize()
+            .is_err()
     );
 }
