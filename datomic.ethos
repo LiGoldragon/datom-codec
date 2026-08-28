@@ -11,8 +11,8 @@ Types.[
   FaultProblem.[Shape Head Value Arity MapPair Protos.ProtosFault]
   Boolean.[True False]
   Integer.SignedInteger
-  Decimal.Float64
-  String.[Bare CurlyQuoted Parenthesized]
+  Decimal.FiniteDecimal
+  String.DatomicString
   Vector<T>.[T]
   Map<K V>.«K V»
   Option<T>.[None Some.T]
@@ -22,8 +22,10 @@ Types.[
 
 ;; Canonical forms: True / False; finite f64 decimals with a point and no
 ;; exponent; None / Some.value; headless guillemet maps with alternating key
-;; and value portions. Comments begin ;; and Protos drops them. Curly quotes
-;; are opaque, asymmetric and balance-based with no escape. Printing is flat.
+;; and value portions. Duplicate map keys fault at the second key. Comments
+;; begin ;; and Protos drops them. Curly quotes are opaque, asymmetric and
+;; balance-based with no escape. FiniteDecimal and DatomicString preserve only
+;; representable Portions, so outbound printing is total and flat.
 ;; A head is a variant, re-emits itself, and may daisy-chain. In an expected
 ;; String position, one canonical Portion (including a.b, a!b, or a:b) is
 ;; recovered through Protos canonical text and may re-emit bare. Struct roots

@@ -3,12 +3,12 @@
 //! Protos owns text delineation and printing. This crate owns only the
 //! contextual mapping between one expected Rust type and a Protos `Portion`.
 
-use std::{collections::BTreeMap, fmt};
+use std::{cmp::Ordering, collections::BTreeMap, fmt, string::String as StdString};
 
 use protos::{
-    Bare, BareExpectation, BareSafe, Delineatable, Enclosed, EnclosedAnatomy, Extent, Headed,
-    Layout, OpaqueBoundary, OpaqueEnclosed, Portion, PortionText, Printing, Separator,
-    StructuralEnclosed, StructuralEnclosure, Symbol,
+    Bare, Delineatable, DelineatedText, Enclosed, EnclosedAnatomy, Extent, Headed, Layout,
+    OpaqueBoundary, Portion, PortionText, Printing, ScalarAnatomy, Separator, StructuralEnclosed,
+    StructuralEnclosure, Symbol,
 };
 
 pub use protos::Text;
@@ -26,6 +26,8 @@ pub enum FaultProblem {
     Value,
     Arity,
     MapPair,
+    DuplicateMapKey,
+    UnrepresentableString,
     Protos,
 }
 
@@ -36,8 +38,7 @@ pub trait Datomic: Sized {
     fn portion(&self) -> Portion;
 
     fn textualize(&self) -> Text<Self> {
-        let printed = self.portion().print(Layout::Flat);
-        Text::from(printed.as_ref())
+        self.portion().print(Layout::Flat).retag()
     }
 }
 
@@ -140,81 +141,132 @@ impl Datomic for bool {
 
 impl Datomic for i64 {
     fn embody(portion: &Portion) -> Result<Self, Fault> {
-        let Some(symbol) = portion.bare_symbol() else {
-            return Err(portion.fault(FaultProblem::Shape));
-        };
-        symbol
-            .canonical_integer()
-            .then(|| symbol.parse().ok())
-            .flatten()
-            .ok_or_else(|| portion.fault(FaultProblem::Value))
+        portion.signed_i64().map_err(|fault| Fault {
+            extent: fault.extent,
+            problem: FaultProblem::Protos,
+        })
     }
 
     fn portion(&self) -> Portion {
-        self.to_string().as_str().bare()
+        Portion::from_signed_i64(*self)
     }
 }
 
-impl Datomic for f64 {
+/// A finite decimal embodied by Protos's scalar anatomy.
+pub struct FiniteDecimal {
+    value: f64,
+    portion: Portion,
+}
+
+pub struct NonFiniteDecimal {
+    pub extent: Extent,
+}
+
+impl TryFrom<f64> for FiniteDecimal {
+    type Error = NonFiniteDecimal;
+
+    fn try_from(value: f64) -> Result<Self, Self::Error> {
+        let portion = Portion::from_decimal_f64(value).map_err(|fault| NonFiniteDecimal {
+            extent: fault.extent,
+        })?;
+        Ok(Self { value, portion })
+    }
+}
+
+pub trait DecimalViewing {
+    fn value(&self) -> f64;
+}
+
+impl DecimalViewing for FiniteDecimal {
+    fn value(&self) -> f64 {
+        self.value
+    }
+}
+
+impl Datomic for FiniteDecimal {
     fn embody(portion: &Portion) -> Result<Self, Fault> {
-        let representation = match portion {
-            Portion::Headed(_, headed)
-                if headed.separator == Separator::Period && headed.body.bare_symbol().is_some() =>
-            {
-                format!(
-                    "{}.{}",
-                    headed.head.as_ref(),
-                    headed.body.bare_symbol().expect("checked above")
-                )
-            }
-            Portion::Bare(_, bare) => bare.symbol.as_ref().into(),
-            _ => return Err(portion.fault(FaultProblem::Shape)),
-        };
-        if !representation.as_str().canonical_decimal() {
-            return Err(portion.fault(FaultProblem::Value));
-        }
-        representation
-            .parse::<f64>()
-            .ok()
-            .filter(|value| value.is_finite())
-            .ok_or_else(|| portion.fault(FaultProblem::Value))
+        let value = portion.decimal_f64().map_err(|fault| Fault {
+            extent: fault.extent,
+            problem: FaultProblem::Protos,
+        })?;
+        Ok(Self {
+            value,
+            portion: portion.clone(),
+        })
     }
 
     fn portion(&self) -> Portion {
-        let decimal = self.decimal();
-        let (whole, fraction) = decimal
-            .split_once('.')
-            .expect("Datomic f64 textualization always includes a point");
-        whole.headed(Separator::Period, fraction.bare())
+        self.portion.clone()
     }
 }
 
-impl Datomic for String {
+/// A String whose canonical Datomic Portion is representable without escapes.
+pub struct DatomicString {
+    value: StdString,
+    portion: Portion,
+}
+
+pub struct UnrepresentableString {
+    pub extent: Extent,
+}
+
+impl AsRef<str> for DatomicString {
+    fn as_ref(&self) -> &str {
+        &self.value
+    }
+}
+
+impl PartialEq for DatomicString {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl Eq for DatomicString {}
+
+impl PartialOrd for DatomicString {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for DatomicString {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.value.cmp(&other.value)
+    }
+}
+
+impl TryFrom<StdString> for DatomicString {
+    type Error = UnrepresentableString;
+
+    fn try_from(value: StdString) -> Result<Self, Self::Error> {
+        let portion = Portion::from_expected_string(value.as_str()).map_err(|fault| {
+            UnrepresentableString {
+                extent: fault.extent,
+            }
+        })?;
+        Ok(Self { value, portion })
+    }
+}
+
+impl Datomic for DatomicString {
     fn embody(portion: &Portion) -> Result<Self, Fault> {
         if let Some(content) = portion.opaque(OpaqueBoundary::CurlyQuote) {
-            return Ok(content.into());
+            return Self::try_from(StdString::from(content))
+                .map_err(|_| portion.fault(FaultProblem::UnrepresentableString));
         }
         if let Some(content) = portion.opaque(OpaqueBoundary::Dialect(
             protos::DialectBoundary::Parentheses,
         )) {
-            return Ok(content.into());
+            return Self::try_from(StdString::from(content))
+                .map_err(|_| portion.fault(FaultProblem::UnrepresentableString));
         }
-        Ok(portion.canonical_text().as_ref().into())
+        Self::try_from(StdString::from(portion.canonical_text().as_ref()))
+            .map_err(|_| portion.fault(FaultProblem::UnrepresentableString))
     }
 
     fn portion(&self) -> Portion {
-        let prospective = Text::<()>::from(self.as_str());
-        if prospective.is_bare_safe_for(BareExpectation::String) {
-            prospective
-                .delineate()
-                .expect("a bare-safe String has a Protos delineation")
-                .portions
-                .into_iter()
-                .next()
-                .expect("a bare-safe String has one Portion")
-        } else {
-            self.as_str().opaque(OpaqueBoundary::CurlyQuote, self)
-        }
+        self.portion.clone()
     }
 }
 
@@ -244,7 +296,11 @@ impl<K: Datomic + Ord, V: Datomic> Datomic for BTreeMap<K, V> {
         }
         let mut map = BTreeMap::new();
         for pair in portions.chunks_exact(2) {
-            map.insert(K::embody(&pair[0])?, V::embody(&pair[1])?);
+            let key = K::embody(&pair[0])?;
+            if map.contains_key(&key) {
+                return Err(pair[0].fault(FaultProblem::DuplicateMapKey));
+            }
+            map.insert(key, V::embody(&pair[1])?);
         }
         Ok(map)
     }
@@ -281,94 +337,11 @@ impl<T: Datomic> Datomic for Option<T> {
     }
 }
 
-trait ScalarAnatomy {
-    fn canonical_integer(&self) -> bool;
-    fn canonical_decimal(&self) -> bool;
-    fn decimal(&self) -> String;
-}
-
-impl ScalarAnatomy for str {
-    fn canonical_integer(&self) -> bool {
-        match self.as_bytes() {
-            [b'0'] => true,
-            [b'1'..=b'9', rest @ ..] => rest.iter().all(u8::is_ascii_digit),
-            [b'-', b'1'..=b'9', rest @ ..] => rest.iter().all(u8::is_ascii_digit),
-            _ => false,
-        }
-    }
-
-    fn canonical_decimal(&self) -> bool {
-        let Some((whole, fraction)) = self.split_once('.') else {
-            return false;
-        };
-        let digits = if let Some(whole) = whole.strip_prefix('-') {
-            whole
-        } else {
-            whole
-        };
-        !digits.is_empty()
-            && digits.bytes().all(|byte| byte.is_ascii_digit())
-            && !fraction.is_empty()
-            && fraction.bytes().all(|byte| byte.is_ascii_digit())
-    }
-
-    fn decimal(&self) -> String {
-        self.into()
-    }
-}
-
-impl ScalarAnatomy for f64 {
-    fn canonical_integer(&self) -> bool {
-        false
-    }
-
-    fn canonical_decimal(&self) -> bool {
-        false
-    }
-
-    fn decimal(&self) -> String {
-        let rendered = self.to_string();
-        let plain = match rendered.split_once(['e', 'E']) {
-            Some((mantissa, exponent)) => {
-                let exponent = exponent
-                    .parse::<i32>()
-                    .expect("Rust f64 exponent is decimal");
-                let negative = mantissa.starts_with('-');
-                let digits = mantissa.trim_start_matches('-').replace('.', "");
-                let point = mantissa.find('.').unwrap_or(mantissa.len()) - usize::from(negative);
-                let target = point as i32 + exponent;
-                let mut expanded = if target <= 0 {
-                    format!("0.{}{}", "0".repeat((-target) as usize), digits)
-                } else if target as usize >= digits.len() {
-                    format!("{}{}", digits, "0".repeat(target as usize - digits.len()))
-                } else {
-                    format!(
-                        "{}.{}",
-                        &digits[..target as usize],
-                        &digits[target as usize..]
-                    )
-                };
-                if negative {
-                    expanded.insert(0, '-');
-                }
-                expanded
-            }
-            None => rendered,
-        };
-        if plain.contains('.') {
-            plain
-        } else {
-            format!("{plain}.0")
-        }
-    }
-}
-
 /// Canonical Portion constructors for a hand-declared Datomic anatomy.
 pub trait PortionBuilding {
     fn bare(&self) -> Portion;
     fn headed(&self, separator: Separator, body: Portion) -> Portion;
     fn structural(&self, enclosure: StructuralEnclosure, portions: Vec<Portion>) -> Portion;
-    fn opaque(&self, boundary: OpaqueBoundary, content: &str) -> Portion;
 }
 
 impl PortionBuilding for str {
@@ -386,12 +359,6 @@ impl PortionBuilding for str {
         let enclosed = StructuralEnclosed::from((enclosure, portions));
         Enclosed::from(enclosed).into()
     }
-
-    fn opaque(&self, boundary: OpaqueBoundary, content: &str) -> Portion {
-        let enclosed = OpaqueEnclosed::try_from((boundary, content.into()))
-            .expect("Datomic strings have a representable Protos opaque boundary");
-        Enclosed::from(enclosed).into()
-    }
 }
 
 impl fmt::Debug for Fault {
@@ -404,6 +371,42 @@ impl fmt::Debug for Fault {
     }
 }
 
+impl fmt::Debug for FiniteDecimal {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_tuple("FiniteDecimal")
+            .field(&self.value)
+            .finish()
+    }
+}
+
+impl fmt::Debug for DatomicString {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_tuple("DatomicString")
+            .field(&self.value)
+            .finish()
+    }
+}
+
+impl fmt::Debug for UnrepresentableString {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("UnrepresentableString")
+            .field("extent", &self.extent)
+            .finish()
+    }
+}
+
+impl fmt::Debug for NonFiniteDecimal {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("NonFiniteDecimal")
+            .field("extent", &self.extent)
+            .finish()
+    }
+}
+
 impl fmt::Debug for FaultProblem {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
@@ -412,6 +415,8 @@ impl fmt::Debug for FaultProblem {
             Self::Value => "Value",
             Self::Arity => "Arity",
             Self::MapPair => "MapPair",
+            Self::DuplicateMapKey => "DuplicateMapKey",
+            Self::UnrepresentableString => "UnrepresentableString",
             Self::Protos => "Protos",
         })
     }

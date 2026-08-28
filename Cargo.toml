@@ -1,6 +1,6 @@
 [package]
 name        = "datomic"
-version     = "0.6.1"
+version     = "0.7.0"
 edition     = "2024"
 rust-version = "1.85"
 license     = "MIT OR Apache-2.0"
@@ -9,7 +9,7 @@ description = "Datomic positional typed data over Protos Portion."
 publish     = false
 
 [dependencies]
-protos = { git = "https://github.com/LiGoldragon/protos", rev = "92a61bf1baf3442657e522d3da6f63cf374ee10a" }
+protos = { git = "https://github.com/LiGoldragon/protos", rev = "7e2bba7d48c62de53b3f93cb6053a490bbd6cf3b" }
 
 [lib]
 name = "datomic"

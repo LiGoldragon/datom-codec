@@ -1,10 +1,10 @@
-## Datom estate status
+# Datomic agent rules
 
-Stack: quick-new
-Status: active substrate dialect
-Role: pure positional typed data riding the published Protos shapes, lexical
-blocks, string carriers, and scoped structural walk.
-
-Datom owns context-sensitive typed realization and textual projection only. It
-does not own lexical scanning, structural lifecycle, Meaning, or a legacy
-terminal-stack role. The current recut is tracked by `primary-xqb.8.14`.
+- Reserve the complete Datomic write set before editing and release its lock
+  after the tree is clean and pushed.
+- Datomic receives and emits Protos `Portion` values only. Never introduce a
+  dialect character reader, writer, or numeric scanner.
+- Public outbound anatomies are total. Validate representability when creating
+  an invariant-bearing Datomic value, never by panicking during projection.
+- Preserve clean breaks: update consumers in their authorized work, never add
+  a legacy Datom API or syntax path here.

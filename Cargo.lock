@@ -4,12 +4,12 @@ version = 4
 
 [[package]]
 name = "datomic"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "protos",
 ]
 
 [[package]]
 name = "protos"
-version = "0.12.0"
-source = "git+https://github.com/LiGoldragon/protos?rev=92a61bf1baf3442657e522d3da6f63cf374ee10a#92a61bf1baf3442657e522d3da6f63cf374ee10a"
+version = "0.14.0"
+source = "git+https://github.com/LiGoldragon/protos?rev=7e2bba7d48c62de53b3f93cb6053a490bbd6cf3b#7e2bba7d48c62de53b3f93cb6053a490bbd6cf3b"

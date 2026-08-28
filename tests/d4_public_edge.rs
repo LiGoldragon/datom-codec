@@ -6,11 +6,12 @@ fn public_edge_embodies_prospective_text_or_returns_an_extent_fault() {
         .embody()
         .expect("text enters through the sole public edge");
     assert_eq!(value, Some(-42));
+    assert_eq!(value.textualize().as_ref(), "Some.-42");
 
     let fault = Text::<Option<i64>>::from("Some.01")
         .embody()
         .expect_err("invalid typed payload faults");
-    assert!(matches!(fault.problem, FaultProblem::Value));
+    assert!(matches!(fault.problem, FaultProblem::Protos));
     assert_eq!(fault.extent.start, 5);
     assert_eq!(fault.extent.end, 7);
 }

@@ -1,5 +1,14 @@
 # Upgrades
 
+## 0.7.0
+
+This is a breaking public type change. Update to Protos 0.14.0 and replace
+raw `f64` and `String` Datomic anatomies with `FiniteDecimal` and
+`DatomicString`. The new types retain a Protos-validated canonical Portion;
+non-finite decimals and unrepresentable no-escape curly content cannot be
+projected. Duplicate map keys now fault at the duplicate key extent rather
+than overwriting an earlier value.
+
 ## 0.6.1
 
 Update to Protos 0.12.0. Expected Strings now preserve any one canonical

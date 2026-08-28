@@ -1,12 +1,14 @@
-use datomic::{Datomic, Fault, FaultProblem, PortionBuilding, PortionViewing, Text, TextEdge};
+use datomic::{
+    Datomic, DatomicString, Fault, FaultProblem, PortionBuilding, PortionViewing, Text, TextEdge,
+};
 use protos::{Portion, Separator, StructuralEnclosure};
 
 struct Lock {
     identifier: i64,
-    name: String,
-    flow: String,
-    paths: Vec<String>,
-    reason: String,
+    name: DatomicString,
+    flow: DatomicString,
+    paths: Vec<DatomicString>,
+    reason: DatomicString,
 }
 
 enum Observe {
@@ -14,7 +16,7 @@ enum Observe {
 }
 
 enum Request {
-    Lock(Lock),
+    Lock(Box<Lock>),
     Observe(Observe),
 }
 
@@ -32,10 +34,10 @@ impl Datomic for Lock {
         };
         Ok(Self {
             identifier: i64::embody(identifier)?,
-            name: String::embody(name)?,
-            flow: String::embody(flow)?,
-            paths: Vec::<String>::embody(paths)?,
-            reason: String::embody(reason)?,
+            name: DatomicString::embody(name)?,
+            flow: DatomicString::embody(flow)?,
+            paths: Vec::<DatomicString>::embody(paths)?,
+            reason: DatomicString::embody(reason)?,
         })
     }
 
@@ -80,7 +82,7 @@ impl Datomic for Request {
         };
         match headed.head.as_ref() {
             "Lock" if headed.separator == Separator::Period => {
-                Lock::embody(&headed.body).map(Self::Lock)
+                Lock::embody(&headed.body).map(|lock| Self::Lock(Box::new(lock)))
             }
             "Observe" => Observe::embody(portion).map(Self::Observe),
             _ => Err(portion.fault(FaultProblem::Head)),
@@ -129,10 +131,10 @@ fn root_struct_enum_unit_and_payload_chains_round_trip() {
         .embody()
         .expect("root struct embodies");
     assert_eq!(lock.identifier, 9);
-    assert_eq!(lock.name, "lock");
-    assert_eq!(lock.flow, "flow");
-    assert_eq!(lock.paths, vec!["/a", "/b"]);
-    assert_eq!(lock.reason, "because it matters");
+    assert_eq!(lock.name.as_ref(), "lock");
+    assert_eq!(lock.flow.as_ref(), "flow");
+    assert!(lock.paths.iter().map(AsRef::as_ref).eq(["/a", "/b"]));
+    assert_eq!(lock.reason.as_ref(), "because it matters");
     assert_eq!(
         lock.textualize().as_ref(),
         "{9 lock flow [/a /b] “because it matters”}"
