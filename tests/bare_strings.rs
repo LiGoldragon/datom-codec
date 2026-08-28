@@ -46,3 +46,13 @@ fn unbalanced_curly_content_is_rejected_before_outbound_projection() {
     assert!(DatomicString::try_from("unbalanced “".to_owned()).is_err());
     assert!(DatomicString::try_from("unbalanced ”".to_owned()).is_err());
 }
+
+#[test]
+fn inbound_datomic_string_fault_retains_its_protos_extent() {
+    let fault = Text::<DatomicString>::from("“unbalanced")
+        .embody()
+        .expect_err("unclosed curly input faults");
+    assert!(matches!(fault.problem, datomic::FaultProblem::Protos));
+    assert_eq!(fault.extent.start, 0);
+    assert_eq!(fault.extent.end, 13);
+}

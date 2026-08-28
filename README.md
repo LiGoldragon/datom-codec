@@ -13,7 +13,7 @@ heads are variants and re-emit themselves.
 An expected String recovers a single Protos Portion as canonical text, so
 `a.b`, `a!b`, and `a:b` remain bare strings. Content that forms multiple
 Portions, such as `two words`, uses opaque curly quotes. This behavior relies
-on Protos 0.12's `BareExpectation::String` and `PortionText` boundary.
+on Protos 0.14's expected-String Portion builder and `PortionText` boundary.
 
 ## Migration
 

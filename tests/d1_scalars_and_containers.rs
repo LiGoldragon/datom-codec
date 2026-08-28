@@ -99,6 +99,15 @@ fn scalar_and_container_faults_retain_the_protos_extent() {
         .embody()
         .expect_err("unpaired map faults");
     assert!(matches!(fault.problem, FaultProblem::MapPair));
+    assert_eq!(fault.extent.start, 0);
+    assert_eq!(fault.extent.end, 9);
+
+    let fault = Text::<Vec<i64>>::from("[1")
+        .embody()
+        .expect_err("unclosed vector faults");
+    assert!(matches!(fault.problem, FaultProblem::Protos));
+    assert_eq!(fault.extent.start, 0);
+    assert_eq!(fault.extent.end, 2);
 
     let fault = Text::<BTreeMap<DatomicString, i64>>::from("«north 1 north 2»")
         .embody()

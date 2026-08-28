@@ -3,12 +3,13 @@
 ;; characters. A type's one Anatomy declares both Portion directions.
 
 Kinds.[
-  Datomic.{embody.[Result<Self Fault>] portion.[Portion]}
+  Datomic.{embody.[Result<Self Fault>] portion.[Portion] textualize.[Text<Self>]}
+  TextEdge<T>.{embody.[Result<T Fault>]}
 ]
 
 Types.[
   Fault.{Extent.Extent Problem.FaultProblem}
-  FaultProblem.[Shape Head Value Arity MapPair Protos.ProtosFault]
+  FaultProblem.[Shape Head Value Arity MapPair DuplicateMapKey UnrepresentableString Protos]
   Boolean.[True False]
   Integer.SignedInteger
   Decimal.FiniteDecimal

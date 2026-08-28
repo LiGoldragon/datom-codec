@@ -3,23 +3,31 @@ use datomic::{
 };
 use protos::{Portion, Separator, StructuralEnclosure};
 
+type LockName = DatomicString;
+type FlowId = DatomicString;
+type LockPath = DatomicString;
+type LockPaths = Vec<LockPath>;
+type LockReason = DatomicString;
+type LockId = i64;
+type Locks = Vec<Lock>;
+
 struct LockRequest {
-    name: DatomicString,
-    flow: DatomicString,
-    paths: Vec<DatomicString>,
-    reason: DatomicString,
+    name: LockName,
+    flow: FlowId,
+    paths: LockPaths,
+    reason: LockReason,
 }
 
 struct Lock {
-    identifier: i64,
-    name: DatomicString,
-    flow: DatomicString,
-    paths: Vec<DatomicString>,
-    reason: DatomicString,
+    identifier: LockId,
+    name: LockName,
+    flow: FlowId,
+    paths: LockPaths,
+    reason: LockReason,
 }
 
 struct LockOverlap {
-    path: DatomicString,
+    path: LockPath,
     lock: Lock,
 }
 
@@ -32,8 +40,12 @@ enum ReleaseRejection {
     UnknownLockId,
 }
 
+enum ObserveSelection {
+    Locks,
+}
+
 enum Observation {
-    Locks(Vec<Lock>),
+    Locks(Locks),
 }
 
 enum Reply {
@@ -46,8 +58,8 @@ enum Reply {
 
 enum Operation {
     Lock(Box<LockRequest>),
-    Release(i64),
-    Observe,
+    Release(LockId),
+    Observe(ObserveSelection),
 }
 
 impl Datomic for LockRequest {
@@ -59,10 +71,10 @@ impl Datomic for LockRequest {
             return Err(portion.fault(FaultProblem::Arity));
         };
         Ok(Self {
-            name: DatomicString::embody(name)?,
-            flow: DatomicString::embody(flow)?,
-            paths: Vec::<DatomicString>::embody(paths)?,
-            reason: DatomicString::embody(reason)?,
+            name: LockName::embody(name)?,
+            flow: FlowId::embody(flow)?,
+            paths: LockPaths::embody(paths)?,
+            reason: LockReason::embody(reason)?,
         })
     }
 
@@ -88,11 +100,11 @@ impl Datomic for Lock {
             return Err(portion.fault(FaultProblem::Arity));
         };
         Ok(Self {
-            identifier: i64::embody(identifier)?,
-            name: DatomicString::embody(name)?,
-            flow: DatomicString::embody(flow)?,
-            paths: Vec::<DatomicString>::embody(paths)?,
-            reason: DatomicString::embody(reason)?,
+            identifier: LockId::embody(identifier)?,
+            name: LockName::embody(name)?,
+            flow: FlowId::embody(flow)?,
+            paths: LockPaths::embody(paths)?,
+            reason: LockReason::embody(reason)?,
         })
     }
 
@@ -119,7 +131,7 @@ impl Datomic for LockOverlap {
             return Err(portion.fault(FaultProblem::Arity));
         };
         Ok(Self {
-            path: DatomicString::embody(path)?,
+            path: LockPath::embody(path)?,
             lock: Lock::embody(lock)?,
         })
     }
@@ -167,6 +179,20 @@ impl Datomic for ReleaseRejection {
     fn portion(&self) -> Portion {
         match self {
             Self::UnknownLockId => "UnknownLockId".bare(),
+        }
+    }
+}
+
+impl Datomic for ObserveSelection {
+    fn embody(portion: &Portion) -> Result<Self, Fault> {
+        (portion.bare_symbol() == Some("Locks"))
+            .then_some(Self::Locks)
+            .ok_or_else(|| portion.fault(FaultProblem::Head))
+    }
+
+    fn portion(&self) -> Portion {
+        match self {
+            Self::Locks => "Locks".bare(),
         }
     }
 }
@@ -239,8 +265,16 @@ impl Datomic for Operation {
             "Lock" => {
                 LockRequest::embody(&headed.body).map(|request| Self::Lock(Box::new(request)))
             }
-            "Release" => i64::embody(&headed.body).map(Self::Release),
-            "Observe" if headed.body.bare_symbol() == Some("Locks") => Ok(Self::Observe),
+            "Release" => {
+                let Some(fields) = headed.body.structural(StructuralEnclosure::Braced) else {
+                    return Err(portion.fault(FaultProblem::Shape));
+                };
+                let [identifier] = fields else {
+                    return Err(portion.fault(FaultProblem::Arity));
+                };
+                i64::embody(identifier).map(Self::Release)
+            }
+            "Observe" => ObserveSelection::embody(&headed.body).map(Self::Observe),
             _ => Err(portion.fault(FaultProblem::Head)),
         }
     }
@@ -248,41 +282,27 @@ impl Datomic for Operation {
     fn portion(&self) -> Portion {
         match self {
             Self::Lock(request) => "Lock".headed(Separator::Period, request.portion()),
-            Self::Release(identifier) => "Release".headed(Separator::Period, identifier.portion()),
-            Self::Observe => "Observe".headed(Separator::Period, "Locks".bare()),
+            Self::Release(identifier) => "Release".headed(
+                Separator::Period,
+                "".structural(StructuralEnclosure::Braced, vec![identifier.portion()]),
+            ),
+            Self::Observe(selection) => "Observe".headed(Separator::Period, selection.portion()),
         }
     }
 }
 
 #[test]
 fn approved_orchestrate_operations_use_one_declarative_anatomy_pattern() {
-    let lock =
-        Text::<Operation>::from("Lock.{datomicD0D4 root/realize_datomic [/a /b] “one line”}")
+    for source in [
+        "Lock.{datomicD0D4 root/realize_datomic [/a /b] “one line”}",
+        "Release.{-42}",
+        "Observe.Locks",
+    ] {
+        let operation = Text::<Operation>::from(source)
             .embody()
-            .expect("Lock request embodies");
-    let Operation::Lock(lock) = lock else {
-        panic!("Lock selects LockRequest");
-    };
-    assert_eq!(lock.name.as_ref(), "datomicD0D4");
-    assert_eq!(lock.flow.as_ref(), "root/realize_datomic");
-    assert!(lock.paths.iter().map(AsRef::as_ref).eq(["/a", "/b"]));
-    assert_eq!(lock.reason.as_ref(), "one line");
-    assert_eq!(
-        lock.textualize().as_ref(),
-        "{datomicD0D4 root/realize_datomic [/a /b] “one line”}"
-    );
-
-    let release = Text::<Operation>::from("Release.80")
-        .embody()
-        .expect("Release embodies");
-    assert!(matches!(release, Operation::Release(80)));
-    assert_eq!(release.textualize().as_ref(), "Release.80");
-
-    let observe = Text::<Operation>::from("Observe.Locks")
-        .embody()
-        .expect("Observe embodies");
-    assert!(matches!(observe, Operation::Observe));
-    assert_eq!(observe.textualize().as_ref(), "Observe.Locks");
+            .expect("approved request root embodies");
+        assert_eq!(operation.textualize().as_ref(), source);
+    }
 }
 
 #[test]
@@ -294,6 +314,7 @@ fn approved_orchestrate_replies_round_trip_byte_identically_through_d4() {
         "Released.{7 lock flow [/a /b] reason}",
         "ReleaseRejected.UnknownLockId",
         "Observed.Locks.[]",
+        "Observed.Locks.[{7 lock flow [/a /b] reason}]",
     ] {
         let reply = Text::<Reply>::from(source)
             .embody()
