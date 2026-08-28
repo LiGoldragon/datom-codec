@@ -1,11 +1,9 @@
+Schema.{0 1 0}
+[]
+
 ;; Datomic is the positional typed-data dialect over Protos Portion.
 ;; Text reaches Datomic only through Protos delineation; Datomic never scans
 ;; characters. A type's one Anatomy declares both Portion directions.
-
-Kinds.[
-  Datomic.{embody.[Result<Self Fault>] portion.[Portion] textualize.[Text<Self>]}
-  TextEdge<T>.{embody.[Result<T Fault>]}
-]
 
 Types.[
   Fault.{Extent.Extent Problem.FaultProblem}
@@ -20,6 +18,13 @@ Types.[
   Struct.{Fields.[Datomic]}
   Enum.[Unit HeadedUnit Payload.Datomic]
 ]
+
+Kinds.[
+  Datomic.{embody.[Result<Self Fault>] portion.[Portion] textualize.[Text<Self>]}
+  TextEdge<T>.{embody.[Result<T Fault>]}
+]
+
+Associations.[]
 
 ;; Canonical forms: True / False; finite f64 decimals with a point and no
 ;; exponent; None / Some.value; headless guillemet maps with alternating key
