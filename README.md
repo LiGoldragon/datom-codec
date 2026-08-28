@@ -2,13 +2,18 @@
 
 Datomic is pure positional typed data on the Protos Portion substrate. A
 single hand-written `Datomic` anatomy maps an expected Rust type to and from
-`Portion`; Protos alone delineates and prints text. This 0.6.0 release is a
+`Portion`; Protos alone delineates and prints text. This 0.6.1 release is a
 clean breaking replacement for Datom's former scoped-walk API.
 
 Canonical text uses `True` / `False`, finite decimal `f64` values with a
 point and no exponent, `None` / `Some.value`, headless alternating guillemet
 maps, opaque curly strings, and flat layout. Struct fields are positional;
 heads are variants and re-emit themselves.
+
+An expected String recovers a single Protos Portion as canonical text, so
+`a.b`, `a!b`, and `a:b` remain bare strings. Content that forms multiple
+Portions, such as `two words`, uses opaque curly quotes. This behavior relies
+on Protos 0.12's `BareExpectation::String` and `PortionText` boundary.
 
 ## Migration
 

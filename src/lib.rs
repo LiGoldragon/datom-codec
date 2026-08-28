@@ -6,9 +6,9 @@
 use std::{collections::BTreeMap, fmt};
 
 use protos::{
-    Bare, BareSafe, Delineatable, Enclosed, EnclosedAnatomy, Extent, Headed, Layout,
-    OpaqueBoundary, OpaqueEnclosed, Portion, Printing, Separator, StructuralEnclosed,
-    StructuralEnclosure, Symbol,
+    Bare, BareExpectation, BareSafe, Delineatable, Enclosed, EnclosedAnatomy, Extent, Headed,
+    Layout, OpaqueBoundary, OpaqueEnclosed, Portion, PortionText, Printing, Separator,
+    StructuralEnclosed, StructuralEnclosure, Symbol,
 };
 
 pub use protos::Text;
@@ -191,9 +191,6 @@ impl Datomic for f64 {
 
 impl Datomic for String {
     fn embody(portion: &Portion) -> Result<Self, Fault> {
-        if let Some(symbol) = portion.bare_symbol() {
-            return Ok(symbol.into());
-        }
         if let Some(content) = portion.opaque(OpaqueBoundary::CurlyQuote) {
             return Ok(content.into());
         }
@@ -202,12 +199,19 @@ impl Datomic for String {
         )) {
             return Ok(content.into());
         }
-        Err(portion.fault(FaultProblem::Shape))
+        Ok(portion.canonical_text().as_ref().into())
     }
 
     fn portion(&self) -> Portion {
-        if Text::<()>::from(self.as_str()).is_bare_safe() {
-            self.as_str().bare()
+        let prospective = Text::<()>::from(self.as_str());
+        if prospective.is_bare_safe_for(BareExpectation::String) {
+            prospective
+                .delineate()
+                .expect("a bare-safe String has a Protos delineation")
+                .portions
+                .into_iter()
+                .next()
+                .expect("a bare-safe String has one Portion")
         } else {
             self.as_str().opaque(OpaqueBoundary::CurlyQuote, self)
         }

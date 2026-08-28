@@ -24,6 +24,8 @@ Types.[
 ;; exponent; None / Some.value; headless guillemet maps with alternating key
 ;; and value portions. Comments begin ;; and Protos drops them. Curly quotes
 ;; are opaque, asymmetric and balance-based with no escape. Printing is flat.
-;; A head is a variant, re-emits itself, and may daisy-chain. Struct roots
+;; A head is a variant, re-emits itself, and may daisy-chain. In an expected
+;; String position, one canonical Portion (including a.b, a!b, or a:b) is
+;; recovered through Protos canonical text and may re-emit bare. Struct roots
 ;; begin {; enum roots begin at their selected variant. Parentheses land as
 ;; String until Meaning exists.

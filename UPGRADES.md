@@ -1,5 +1,12 @@
 # Upgrades
 
+## 0.6.1
+
+Update to Protos 0.12.0. Expected Strings now preserve any one canonical
+Protos Portion as bare text, including `a.b`, `a!b`, and `a:b`; text with
+spaces remains curly-opaque. This completes the intended 0.6 typed String
+contract without a compatibility parser.
+
 ## 0.6.0
 
 This is a breaking deployment. Rename the dependency and Rust import from
