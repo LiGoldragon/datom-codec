@@ -12,16 +12,16 @@ Types.[
   Integer.SignedInteger
   Decimal.FiniteDecimal
   String.DatomicString
-  Vector<T>.[T]
-  Map<K V>.«K V»
-  Option<T>.[None Some.T]
+  Vector.[T]
+  Map.«K V»
+  Option.[None Some.T]
   Struct.{Fields.[Datomic]}
   Enum.[Unit HeadedUnit Payload.Datomic]
 ]
 
 Kinds.[
   Datomic.{embody.[Result<Self Fault>] portion.[Portion] textualize.[Text<Self>]}
-  TextEdge<T>.{embody.[Result<T Fault>]}
+  TextEdge.{embody.[Result<T Fault>]}
 ]
 
 Associations.[]
