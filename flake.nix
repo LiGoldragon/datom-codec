@@ -1,5 +1,5 @@
 {
-  description = "datom — Datom text serialization and deserialization";
+  description = "datomic — positional typed data over Protos Portion";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -27,30 +27,30 @@
         checks = {
           build = craneLib.cargoBuild (commonArguments // { inherit cargoArtifacts; });
           test = craneLib.cargoTest (commonArguments // { inherit cargoArtifacts; });
-          no-production-free-functions = pkgs.runCommand "datom-no-production-free-functions" { } ''
+          no-production-free-functions = pkgs.runCommand "datomic-no-production-free-functions" { } ''
             if grep -R -n -E '^(pub(\([^)]*\))? )?fn ' ${src}/src; then
               echo "production Rust must not use module-level free functions" >&2
               exit 1
             fi
             touch $out
           '';
-          no-production-inherent-methods = pkgs.runCommand "datom-no-production-inherent-methods" { } ''
+          no-production-inherent-methods = pkgs.runCommand "datomic-no-production-inherent-methods" { } ''
             if grep -R -n -E '^[[:space:]]*impl[[:space:]]+[[:alpha:]_][[:alnum:]_:<>]*[[:space:]]*\{' ${src}/src; then
               echo "production Rust must home behavior in traits" >&2
               exit 1
             fi
             touch $out
           '';
-          no-zst-behavior = pkgs.runCommand "datom-no-zst-behavior" { } ''
+          no-zst-behavior = pkgs.runCommand "datomic-no-zst-behavior" { } ''
             if grep -R -n -E '^[[:space:]]*(pub[[:space:]]+)?struct[[:space:]]+[[:alpha:]_][[:alnum:]_]*[[:space:]]*;' ${src}/src; then
               echo "behavioral Rust nouns must carry data" >&2
               exit 1
             fi
             touch $out
           '';
-          no-forbidden-vocabulary = pkgs.runCommand "datom-no-forbidden-vocabulary" { } ''
+          no-forbidden-vocabulary = pkgs.runCommand "datomic-no-forbidden-vocabulary" { } ''
             if grep -R -n -i -E 'encode|decode|codec|transcode' ${src}/src; then
-              echo "Datom names must use the ruled form vocabulary" >&2
+              echo "Datomic names must use the ruled form vocabulary" >&2
               exit 1
             fi
             touch $out
@@ -66,7 +66,7 @@
           });
         };
         devShells.default = pkgs.mkShell {
-          name = "datom";
+          name = "datomic";
           packages = [ pkgs.jujutsu toolchain ];
         };
       });

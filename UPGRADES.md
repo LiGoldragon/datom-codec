@@ -1,5 +1,18 @@
 # Upgrades
 
+## 0.6.0
+
+This is a breaking deployment. Rename the dependency and Rust import from
+`datom` to `datomic`, update the repository pin to `LiGoldragon/datomic`, and
+replace the former scoped-walk traits and typed-text carrier with the one
+`Datomic` anatomy and `Text<T>` public edge.
+
+No legacy syntax or API shim exists. Re-author each consumer's anatomy using
+Protos `Portion`, then convert text only through `Text::<T>::from(input)` and
+the Datomic edge. Convert booleans to `True`/`False`, options to
+`None`/`Some.value`, maps to headless alternating guillemet portions, and
+finite floats to decimal forms with a decimal point and no exponent.
+
 ## 0.5.0
 
 Datom now depends on Protos 0.8.0, whose public `Shape` has a new
