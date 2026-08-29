@@ -11,7 +11,7 @@ Types.[
 ]
 
 Kinds.[
-  Datomic.{Visibility.Public Supertraits.[Sized] Methods.[embody.{Receiver.None Inputs.[portion.Borrowed<Portion>] Output.Result<Self Fault>} portion.{Receiver.Shared Output.Portion} textualize.{Receiver.Shared Output.Text<Self> Default.Yes}]}
+  Datomic.{Visibility.Public Supertraits.[Sized] Methods.[embody.{Receiver.None Inputs.[portion.Borrowed<Portion>] Output.Result<Self Fault>} portion.{Receiver.Shared Output.Portion} textualize.{Receiver.Shared Output.Text<Self> Default.Chain.[Self portion print.[Layout.Flat] retag]]}
   TextEdge.{Visibility.Public Generics.<T> Methods.[embody.{Receiver.Shared Output.Result<T Fault>}]}
   PortionViewing.{Visibility.Public Methods.[bareSymbol.{Receiver.Shared Output.Option<Borrowed<StringSlice>>} headed.{Receiver.Shared Output.Option<Borrowed<Headed>>} structural.{Receiver.Shared Inputs.[enclosure.StructuralEnclosure] Output.Option<Borrowed<Slice<Portion>>>} opaque.{Receiver.Shared Inputs.[boundary.OpaqueBoundary] Output.Option<Borrowed<StringSlice>>} fault.{Receiver.Shared Inputs.[problem.FaultProblem] Output.Fault}]}
   DecimalViewing.{Visibility.Public Methods.[value.{Receiver.Shared Output.Float64}]}
