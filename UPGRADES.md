@@ -1,5 +1,11 @@
 # Upgrades
 
+## Unreleased
+
+The authored Ethos map now names the complete public Datomic declaration
+contract, including invariant-bearing opaque public types and the D3 anatomy
+traits. This is declaration ownership only; the Rust API is unchanged.
+
 ## 0.7.0
 
 This is a breaking public type change. Update to Protos 0.14.0 and replace
