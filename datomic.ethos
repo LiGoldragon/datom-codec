@@ -4,9 +4,9 @@ Schema.{0 1 0}
 Types.[
   Fault.Struct.{Visibility.Public Public.Extent.Extent Public.Problem.FaultProblem}
   FaultProblem.Enum.[Visibility.Public Shape Head Value Arity MapPair DuplicateMapKey UnrepresentableString Protos]
-  FiniteDecimal.Struct.{Visibility.Public}
+  FiniteDecimal.Struct.{Visibility.Public Private.Value.Float64 Private.Portion.Portion}
   NonFiniteDecimal.Struct.{Visibility.Public Public.Extent.Extent}
-  DatomicString.Struct.{Visibility.Public}
+  DatomicString.Struct.{Visibility.Public Private.Value.StdString Private.Portion.Portion}
   UnrepresentableString.Struct.{Visibility.Public Public.Extent.Extent}
 ]
 
