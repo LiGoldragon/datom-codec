@@ -1,3 +1,30 @@
+# Upgrading from datomic 0.8 to 0.9
+
+## New features
+
+### Datomic for Situated<F>
+
+`protos::Situated<F>` now implements `Corporal<Datom>` and `Datomic` for
+any `F: Datomic`. The datom is `{ Option<Extent> <F's datom> }`, matching
+the format orchestrate prints to stderr:
+`Unreadable.{ Some.{ 5 13 } Structural.{ { 5 13 } Unclosed.Braced } }`.
+
+Import `datomic:[ Situated Fault ]` and use `Situated<Fault>` directly.
+
+### impl_datomic_box! macro for recursive types
+
+Rust's orphan rule prevents a blanket `Corporal<Datom>` impl for `Box<T>`.
+For recursive types that require `Box<T>`, call:
+
+```rust
+datomic::impl_datomic_box!(YourType);
+```
+
+This generates transparent `Corporal<Datom>` and `Datomic` impls for
+`Box<YourType>`: a Box carries its content's datom exactly.
+
+---
+
 # Upgrading from datomic 0.7 to 0.8
 
 ## Breaking changes

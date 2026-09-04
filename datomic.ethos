@@ -1,5 +1,5 @@
 ; datomic.ethos
-Library.{0 8 0}
+Library.{0 9 0}
 [ protos:[ Text Integer Decimal Boolean Symbol Separator Protoform Delineation Path Extent Potential Protosizable Conceptual Actualizable Printing Embodied ] ]
 [ Datom.[ Variant.{ Symbol Separator Option<Datom> }
           Struct.Vector<Datom>
@@ -17,4 +17,4 @@ Library.{0 8 0}
 [ Datomic.{ [ Embodied ] [] «» [ incorporate:{ [ Datom ] [ Result<Self Fault> ] } datomize.[ Datom ] ] }
   Textualizable.[ textualize.[ Text ] ] ]
 [ Datom.[ Protosizable ] Protoform.[ Conceptual<Datom> ] Potential<Datomic>.[ DatomicActualizable ] Datomic.[ Textualizable ]
-  Integer.[ Datomic ] Decimal.[ Datomic ] Boolean.[ Datomic ] Text.[ Datomic ] Meaning.[ Datomic ] Vector<Datomic>.[ Datomic ] Option<Datomic>.[ Datomic ] Result<Datomic Datomic>.[ Datomic ] Map<Datomic Datomic>.[ Datomic ] ]
+  Integer.[ Datomic ] Decimal.[ Datomic ] Boolean.[ Datomic ] Text.[ Datomic ] Meaning.[ Datomic ] Vector<Datomic>.[ Datomic ] Option<Datomic>.[ Datomic ] Result<Datomic Datomic>.[ Datomic ] Map<Datomic Datomic>.[ Datomic ] Situated<Datomic>.[ Datomic ] ]

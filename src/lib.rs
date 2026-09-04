@@ -1181,3 +1181,72 @@ impl Datomic for Datom {
         self.clone()
     }
 }
+
+// ---------------------------------------------------------------------------
+// Datomic for Box<T>:
+//
+// Rust's orphan rule prevents a blanket `impl<T: Datomic> Corporal<Datom> for Box<T>`
+// because `Corporal` is defined in protos (foreign) and the type parameter T is
+// uncovered (Box is #[fundamental], so T is the effective Self, appearing before
+// the local type Datom in the trait-parameter order).
+//
+// Consumers with recursive types that require Box<T> call `impl_datomic_box!(TheirType)`
+// in their crate to generate the specific impls. The datom is transparent: a Box
+// carries its content's datom exactly.
+// ---------------------------------------------------------------------------
+
+/// Generate `Corporal<Datom>` and `Datomic` impls for `Box<$t>`, delegating
+/// transparently to `$t`. Call this in the crate that defines the recursive type.
+///
+/// ```rust,ignore
+/// impl_datomic_box!(Query);
+/// ```
+#[macro_export]
+macro_rules! impl_datomic_box {
+    ($t:ty) => {
+        impl protos::Corporal<$crate::Datom> for Box<$t> {
+            type Fault = $crate::Fault;
+            fn incorporate(datom: $crate::Datom) -> Result<Self, $crate::Fault> {
+                <$t as protos::Corporal<$crate::Datom>>::incorporate(datom).map(Box::new)
+            }
+        }
+        impl $crate::Datomic for Box<$t> {
+            fn datomize(&self) -> $crate::Datom {
+                $crate::Datomic::datomize(self.as_ref())
+            }
+        }
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Datomic for Situated<F>: a fault joined to its extent
+// Datom: { Option<Extent> <F's datom> }  e.g. { Some.{ 5 13 } Structural.{…} }
+//         { None <F's datom> }
+// ---------------------------------------------------------------------------
+
+impl<F: Datomic> Corporal<Datom> for Situated<F> {
+    type Fault = Fault;
+    fn incorporate(datom: Datom) -> Result<Self, Fault> {
+        match datom {
+            Datom::Struct(ref fields) if fields.len() == 2 => {
+                let extent = Option::<Extent>::incorporate(fields[0].clone())?;
+                let fault = F::incorporate(fields[1].clone())?;
+                Ok(Situated(extent, fault))
+            }
+            Datom::Struct(ref fields) => Err(Fault::Corporal(
+                vec![],
+                Problem::Arity(2, fields.len() as Integer),
+            )),
+            _ => Err(Fault::Corporal(
+                vec![],
+                Problem::Shape(Expected::Struct, datom),
+            )),
+        }
+    }
+}
+
+impl<F: Datomic> Datomic for Situated<F> {
+    fn datomize(&self) -> Datom {
+        Datom::Struct(vec![self.0.datomize(), self.1.datomize()])
+    }
+}

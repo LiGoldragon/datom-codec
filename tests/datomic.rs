@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use datomic::{
     Actualizable, Corporal, Datom, Datomic, Enclosure, Expected, Extent, Fault, Meaning, Printing,
-    Problem, Protoform, Protosizable, Separator, Textualizable,
+    Problem, Protoform, Protosizable, Separator, Situated, Textualizable,
 };
 use protos::{Conceptual, Potential, Structural};
 
@@ -599,4 +599,107 @@ fn conceptual_fault_from_odd_map() {
 #[test]
 fn corporal_fault_from_wrong_type() {
     assert!(actualize::<i64>("True").is_err());
+}
+
+// ---------------------------------------------------------------------------
+// Box<T> tests — via impl_datomic_box! macro
+// ---------------------------------------------------------------------------
+
+// A recursive type that needs Box<T>: a query that can nest.
+// `impl_datomic_box!(Query)` generates Corporal<Datom> and Datomic for Box<Query>
+// transparently (a Box carries its content's datom exactly).
+#[derive(Clone, PartialEq, Eq, Debug)]
+enum Query {
+    Literal(i64),
+    Nested(Box<Query>),
+}
+
+impl Corporal<Datom> for Query {
+    type Fault = Fault;
+    fn incorporate(datom: Datom) -> Result<Self, Fault> {
+        match &datom {
+            Datom::Variant(head, sep, body) => {
+                if *sep != Separator::Period {
+                    return Err(Fault::Corporal(vec![], Problem::Separator(*sep)));
+                }
+                match (head.as_str(), body) {
+                    ("Literal", Some(b)) => i64::incorporate(*b.clone()).map(Query::Literal),
+                    ("Nested", Some(b)) => Box::<Query>::incorporate(*b.clone()).map(Query::Nested),
+                    _ => Err(Fault::Corporal(
+                        vec![],
+                        Problem::UnknownVariant(head.clone()),
+                    )),
+                }
+            }
+            _ => Err(Fault::Corporal(
+                vec![],
+                Problem::Shape(Expected::Variant, datom),
+            )),
+        }
+    }
+}
+
+impl Datomic for Query {
+    fn datomize(&self) -> Datom {
+        match self {
+            Query::Literal(n) => Datom::Variant(
+                "Literal".to_owned(),
+                Separator::Period,
+                Some(Box::new(n.datomize())),
+            ),
+            Query::Nested(inner) => Datom::Variant(
+                "Nested".to_owned(),
+                Separator::Period,
+                Some(Box::new(inner.datomize())),
+            ),
+        }
+    }
+}
+
+datomic::impl_datomic_box!(Query);
+
+#[test]
+fn box_query_recursive_round_trips() {
+    // Demonstrates impl_datomic_box!: Box<Query> carries Query's datom transparently.
+    let q = Query::Nested(Box::new(Query::Nested(Box::new(Query::Literal(7)))));
+    round_trip("Nested.Nested.Literal.7", q);
+}
+
+// ---------------------------------------------------------------------------
+// Situated<F> tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn situated_fault_datomizes_as_struct() {
+    // Matches orchestrate stderr: Unreadable.{ Some.{ 5 13 } Structural.{ { 5 13 } Unclosed.Braced } }
+    // The Situated part is: { Some.{ 5 13 } Structural.{ { 5 13 } Unclosed.Braced } }
+    let inner = Fault::Structural(protos::Fault {
+        extent: Extent(5, 13),
+        problem: protos::Problem::Unclosed(Enclosure::Braced),
+    });
+    let situated = Situated(Some(Extent(5, 13)), inner);
+    let text = situated.textualize();
+    assert_eq!(
+        text,
+        "{ Some.{ 5 13 } Structural.{ { 5 13 } Unclosed.Braced } }"
+    );
+
+    // round-trip through incorporate
+    let datom = situated.datomize();
+    let recovered = Situated::<Fault>::incorporate(datom).unwrap();
+    assert_eq!(recovered.textualize(), text);
+}
+
+#[test]
+fn situated_fault_none_extent_round_trips() {
+    let inner = Fault::Structural(protos::Fault {
+        extent: Extent(5, 13),
+        problem: protos::Problem::Unclosed(Enclosure::Braced),
+    });
+    let situated = Situated::<Fault>(None, inner);
+    let text = situated.textualize();
+    assert_eq!(text, "{ None Structural.{ { 5 13 } Unclosed.Braced } }");
+    let datom = situated.datomize();
+    let recovered = Situated::<Fault>::incorporate(datom).unwrap();
+    assert_eq!(recovered.textualize(), text);
 }
