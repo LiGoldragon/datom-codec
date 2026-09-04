@@ -1,24 +1,20 @@
-Schema.{0 1 0}
-[]
-
-Types.[
-  Fault.Struct.{Visibility.Public Public.Extent.Extent Public.Problem.FaultProblem}
-  FaultProblem.Enum.[Visibility.Public Shape Head Value Arity MapPair DuplicateMapKey UnrepresentableString Protos]
-  FiniteDecimal.Struct.{Visibility.Public Private.Value.Float64 Private.Portion.Portion}
-  NonFiniteDecimal.Struct.{Visibility.Public Public.Extent.Extent}
-  DatomicString.Struct.{Visibility.Public Private.Value.StdString Private.Portion.Portion}
-  UnrepresentableString.Struct.{Visibility.Public Public.Extent.Extent}
-]
-
-Kinds.[
-  Datomic.{Visibility.Public Supertraits.[Sized] Methods.[embody.{Receiver.None Inputs.[portion.Borrowed<Portion>] Output.Result<Self Fault>} portion.{Receiver.Shared Output.Portion} textualize.{Receiver.Shared Output.Text<Self> Default.Chain.[Self portion print.[Layout.Flat] retag]}]}
-  TextEdge.{Visibility.Public Generics.<T> Methods.[embody.{Receiver.Shared Output.Result<T Fault>}]}
-  PortionViewing.{Visibility.Public Methods.[bareSymbol.{Receiver.Shared Output.Option<Borrowed<StringSlice>>} headed.{Receiver.Shared Output.Option<Borrowed<Headed>>} structural.{Receiver.Shared Inputs.[enclosure.StructuralEnclosure] Output.Option<Borrowed<Slice<Portion>>>} opaque.{Receiver.Shared Inputs.[boundary.OpaqueBoundary] Output.Option<Borrowed<StringSlice>>} fault.{Receiver.Shared Inputs.[problem.FaultProblem] Output.Fault}]}
-  DecimalViewing.{Visibility.Public Methods.[value.{Receiver.Shared Output.Float64}]}
-  PortionBuilding.{Visibility.Public Methods.[bare.{Receiver.Shared Output.Portion} headed.{Receiver.Shared Inputs.[separator.Separator body.Portion] Output.Portion} structural.{Receiver.Shared Inputs.[enclosure.StructuralEnclosure portions.Vector<Portion>] Output.Portion}]}
-]
-
-Associations.[
-  FiniteDecimal.[Datomic DecimalViewing]
-  DatomicString.[Datomic]
-]
+; datomic.ethos
+Library.{0 8 0}
+[ protos:[ Text Integer Decimal Boolean Symbol Separator Protoform Delineation Path Extent Potential Protosizable Conceptual Actualizable Printing Embodied ] ]
+[ Datom.[ Variant.{ Symbol Separator Option<Datom> }
+          Struct.Vector<Datom>
+          Vector.Vector<Datom>
+          Map.Vector<Pair>
+          Text.Text
+          Meaning.Text
+          Bare.Symbol ]
+  Pair.{ Datom Datom }
+  Meaning.[ Plain.Text ]
+  Fault.[ Structural.protos:Fault Conceptual.{ Path Problem } Corporal.{ Path Problem } ]
+  Situated.{ Option<Extent> Fault }
+  Problem.[ Shape.{ Expected Datom } Arity.{ Integer Integer } UnknownVariant.Symbol Separator.Separator Value.Text Pairing DuplicateKey.Datom OneValue ]
+  Expected.[ Variant Struct Vector Map Text Meaning Integer Decimal Boolean Bare ] ]
+[ Datomic.{ [ Embodied ] [] «» [ incorporate:{ [ Datom ] [ Result<Self Fault> ] } datomize.[ Datom ] ] }
+  Textualizable.[ textualize.[ Text ] ] ]
+[ Datom.[ Protosizable ] Protoform.[ Conceptual<Datom> ] Potential<Datomic>.[ DatomicActualizable ] Datomic.[ Textualizable ]
+  Integer.[ Datomic ] Decimal.[ Datomic ] Boolean.[ Datomic ] Text.[ Datomic ] Meaning.[ Datomic ] Vector<Datomic>.[ Datomic ] Option<Datomic>.[ Datomic ] Result<Datomic Datomic>.[ Datomic ] Map<Datomic Datomic>.[ Datomic ] ]

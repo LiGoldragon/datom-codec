@@ -1,67 +1,62 @@
-# Upgrades
+# Upgrading from datomic 0.7 to 0.8
 
-## Unreleased
+## Breaking changes
 
-The authored Ethos map now names the complete public Datomic declaration
-contract, including invariant-bearing opaque public types and the D3 anatomy
-traits. This is declaration ownership only; the Rust API is unchanged.
+### Portion is now Protoform
 
-## 0.7.0
+All references to `Portion` become `Protoform`. The protos crate
+(0.15.0) provides the new types.
 
-This is a breaking public type change. Update to Protos 0.14.0 and replace
-raw `f64` and `String` Datomic anatomies with `FiniteDecimal` and
-`DatomicString`. The new types retain a Protos-validated canonical Portion;
-non-finite decimals and unrepresentable no-escape curly content cannot be
-projected. Duplicate map keys now fault at the duplicate key extent rather
-than overwriting an earlier value.
+### New concept type: Datom
 
-## 0.6.1
+The `Datom` enum replaces the old `Portion`-based pattern matching.
+Instead of pattern-matching on `Portion::Headed`, `Portion::Enclosed`,
+etc., you now work with `Datom::Variant`, `Datom::Struct`,
+`Datom::Vector`, etc.
 
-Update to Protos 0.12.0. Expected Strings now preserve any one canonical
-Protos Portion as bare text, including `a.b`, `a!b`, and `a:b`; text with
-spaces remains curly-opaque. This completes the intended 0.6 typed String
-contract without a compatibility parser.
+### Datomic trait: embody/portion -> incorporate/datomize
 
-## 0.6.0
+| 0.7 | 0.8 |
+|---|---|
+| `Datomic::embody(portion: &Portion) -> Result<Self, Fault>` | `Datomic::incorporate(datom: Datom) -> Result<Self, Fault>` |
+| `Datomic::portion(&self) -> Portion` | `Datomic::datomize(&self) -> Datom` |
 
-This is a breaking deployment. Rename the dependency and Rust import from
-`datom` to `datomic`, update the repository pin to `LiGoldragon/datomic`, and
-replace the former scoped-walk traits and typed-text carrier with the one
-`Datomic` anatomy and `Text<T>` public edge.
+`incorporate` takes ownership of the Datom (no reference).
+`datomize` returns a Datom (not a Protoform).
 
-No legacy syntax or API shim exists. Re-author each consumer's anatomy using
-Protos `Portion`, then convert text only through `Text::<T>::from(input)` and
-the Datomic edge. Convert booleans to `True`/`False`, options to
-`None`/`Some.value`, maps to headless alternating guillemet portions, and
-finite floats to decimal forms with a decimal point and no exponent.
+### DatomicString -> String
 
-## 0.5.0
+`DatomicString` is removed. Use `String` directly; datomize handles
+the bare-safe check internally.
 
-Datom now depends on Protos 0.8.0, whose public `Shape` has a new
-`DottedBare` case for headed units such as `Observe.Locks`; update exhaustive
-`Shape` matches in consumers.
+### FiniteDecimal -> f64
 
-`i64` now implements the Datom scalar seams. Its accepted and canonical form
-is bare ASCII decimal: `0`, positive digits without a leading zero, or `-`
-followed by positive digits; values outside the `i64` range, `+`, `-0`, and
-leading zeroes are faults.
+`FiniteDecimal` is removed. Use `f64` directly; incorporate checks
+for finite values.
 
-`DatomHeadedUnit` is the public composition seam for a payloadless enum that
-projects as `Head.Unit`. Implement it together with `DatomRoot` for root
-families such as `Observe.Locks`; it replaces no existing schema form.
+### TextEdge -> DatomicActualizable
 
-## 0.4.0
+The `TextEdge` trait is replaced by `DatomicActualizable`, which
+provides `actualize()` on `Potential<T>` for any `T: Datomic`.
 
-Plain Strings no longer accept or project parenthesis-delimited text. Replace
-every delimited plain String with curly quotes (`“ … ”`); bare text remains a
-String only where the expected type is String. Parentheses are reserved for
-the future structured String, Meaning, and are not a Datom plain-String form.
+### Fault taxonomy
 
-## 0.3.0
+The old `Fault { extent, problem: FaultProblem }` becomes a three-layer
+`Fault` enum: `Structural(protos::Fault)`, `Conceptual(Path, Problem)`,
+`Corporal(Path, Problem)`. The `Situated` struct joins a fault to an
+extent via the delineation's situation map.
 
-Map containers now use headless guillemets: replace `Map.[ … ]` with
-`« … »`. Existing map-entry forms inside the container are unchanged.
+### PortionViewing / PortionBuilding removed
 
-`DatomRoot` no longer supplies `root_head()`. Root realization and projection
-now use the expected root type: an enum root starts directly with its selected
-variant; a non-enum root uses its own selected shape.
+These helper traits are no longer needed. The Datom concept type
+provides the abstraction layer; implement `Datomic` directly.
+
+### Migration steps
+
+1. Update protos dependency to 0.15.0.
+2. Replace all `Portion`-based code with `Datom`-based code.
+3. Rename `embody` -> `incorporate`, `portion` -> `datomize`.
+4. Replace `DatomicString` with `String`.
+5. Replace `FiniteDecimal` with `f64`.
+6. Replace `TextEdge::embody` with `DatomicActualizable::actualize`.
+7. Update fault handling to the three-layer taxonomy.

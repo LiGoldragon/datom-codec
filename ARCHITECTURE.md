@@ -1,23 +1,50 @@
-# Datomic architecture
+# Architecture
 
-Datomic is the positional typed-data dialect over Protos. Protos owns the
-only text delineator and printer. Datomic owns the expected-type anatomy that
-maps one received `Portion` to an embodied value and maps an invariant-bearing
-embodied value back to a `Portion`.
+## Four layers
 
-`Text<T>` is the D4 edge. Its inbound `TextEdge<T>` delineates once through
-Protos then asks `T` for its anatomy; failure remains attached to the relevant
-Protos extent. `Datomic::textualize` hands the constructed Portion to the
-Protos writer and returns that writer's typed canonical Text directly.
+| Layer | Type | Descent | Ascent |
+|---|---|---|---|
+| Text | `Text`, `Potential<T>` | `Structural::delineate` | -- |
+| Protoform | `Protoform`, `Delineation` | `Conceptual<Datom>::conceive` | `Protosizable::protosize` (on Datom) |
+| Concept | `Datom` | `Datomic::incorporate` | `Datomic::datomize` |
+| Corporal | Rust value | -- | -- |
 
-Scalars use Protos's expected-scalar boundary. Datomic does not inspect
-digits, decimal points, exponent notation, or numeric ranges. A finite decimal
-is an invariant-bearing Datomic type, so non-finite floating values cannot
-enter an outbound anatomy. Likewise a Datomic string is representable before
-it is stored: no-escape, asymmetric curly-quote balance is checked at creation
-rather than during textualization.
+## Conceive rules (Protoform -> Datom)
 
-Records consume structural children by position. Heads belong to variants and
-re-emit unchanged. Vectors are bracketed, maps are headless guillemet blocks
-with alternating keys and values, duplicate keys fault at the duplicate key
-extent, and options are `None` or `Some.value`.
+```
+; ethos examples of datom values
+{ Ada 1990 }                    ; a struct of name Text, born Integer
+[ Author Reviewer.{ 2024 17 } ] ; a vector of Role
+Observed.Locks.[]               ; a variant chain
+```
+
+```rust
+// The target Rust
+struct Person(String, i64);
+enum Role { Author, Reviewer(i64, i64) }
+```
+
+- Braced -> Struct(children)
+- Bracketed -> Vector(children)
+- Guillemets -> Map(pairs); odd count faults
+- CurlyQuotes -> Text(content)
+- Parentheses -> Meaning(content)
+- Bare -> Bare(symbol)
+- Headed -> Variant(head, separator, body)
+- Angled -> fault (Shape)
+
+## Incorporate rules (Datom -> T)
+
+Positional: the reader walks the expected type.
+
+- **Integer**: Bare, ASCII decimal, optional `-`, no `+`, no leading zero
+- **Boolean**: Bare `True` / `False`
+- **Decimal**: Bare or all-bare Variant chain rejoined; finite; must contain `.`
+- **Text**: Text/Bare/all-bare chain rejoined (the bare-string rule)
+- **Meaning**: Meaning -> Plain
+- **Vec<T>**: Vector of T
+- **BTreeMap<K,V>**: Map; DuplicateKey faults
+- **Option<T>**: `None` / `Some.T`
+- **Result<T,E>**: `Ok.T` / `Err.E`
+- **Struct**: Struct with exact arity
+- **Enum**: Bare for unit variant, `Variant.body` for data variant (Period only)
