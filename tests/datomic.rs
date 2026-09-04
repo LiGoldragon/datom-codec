@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use datomic::{
-    Actualizable, Corporal, Datom, Datomic, Enclosure, Expected, Fault, Meaning, Printing, Problem,
-    Protoform, Protosizable, Separator, Textualizable,
+    Actualizable, Corporal, Datom, Datomic, Enclosure, Expected, Extent, Fault, Meaning, Printing,
+    Problem, Protoform, Protosizable, Separator, Textualizable,
 };
 use protos::{Conceptual, Potential, Structural};
 
@@ -448,9 +448,41 @@ fn vision_locked_example() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn fault_textualizes_and_round_trips() {
+fn corporal_fault_textualizes_and_round_trips() {
     let fault = Fault::Corporal(vec![0, 1], Problem::Value("bad".to_owned()));
     let text = fault.textualize();
+    let re_fault: Fault = actualize(&text).unwrap();
+    assert_eq!(re_fault, fault);
+}
+
+#[test]
+fn structural_fault_textualizes_and_round_trips() {
+    let fault = Fault::Structural(protos::Fault {
+        extent: Extent(5, 13),
+        problem: protos::Problem::Unclosed(Enclosure::Braced),
+    });
+    let text = fault.textualize();
+    // Must produce proper datom, not Rust Debug: Structural.{ { 5 13 } Unclosed.Braced }
+    assert!(
+        !text.contains("Unclosed("),
+        "structural fault must not contain Rust Debug: {text}"
+    );
+    assert!(
+        text.contains("Unclosed.Braced"),
+        "structural fault must contain datom form: {text}"
+    );
+    let re_fault: Fault = actualize(&text).unwrap();
+    assert_eq!(re_fault, fault);
+}
+
+#[test]
+fn separator_fault_textualizes_without_debug() {
+    let fault = Fault::Corporal(vec![], Problem::Separator(Separator::Period));
+    let text = fault.textualize();
+    assert!(
+        !text.contains("Period)"),
+        "separator fault must not contain Rust Debug: {text}"
+    );
     let re_fault: Fault = actualize(&text).unwrap();
     assert_eq!(re_fault, fault);
 }

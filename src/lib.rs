@@ -822,6 +822,9 @@ impl Corporal<Datom> for Problem {
                     }
                     ("Value", Some(b)) => Text::incorporate(*b.clone()).map(Problem::Value),
                     ("DuplicateKey", Some(b)) => Ok(Problem::DuplicateKey(*b.clone())),
+                    ("Separator", Some(b)) => {
+                        Separator::incorporate(*b.clone()).map(Problem::Separator)
+                    }
                     _ => Err(Fault::Corporal(
                         vec![],
                         Problem::UnknownVariant(head.clone()),
@@ -867,7 +870,7 @@ impl Datomic for Problem {
             Problem::Separator(sep) => Datom::Variant(
                 "Separator".to_owned(),
                 Separator::Period,
-                Some(Box::new(Datom::Bare(format!("{sep:?}")))),
+                Some(Box::new(sep.datomize())),
             ),
             Problem::Value(v) => Datom::Variant(
                 "Value".to_owned(),
@@ -894,19 +897,9 @@ impl Corporal<Datom> for Fault {
                     return Err(Fault::Corporal(vec![], Problem::Separator(*sep)));
                 }
                 match (head.as_str(), body) {
-                    ("Structural", Some(b)) => match b.as_ref() {
-                        Datom::Struct(fields) if fields.len() == 2 => {
-                            // Extent + Problem name — simplified for round-trip
-                            Ok(Fault::Structural(protos::Fault {
-                                extent: Extent(0, 0),
-                                problem: protos::Problem::EmptyInput,
-                            }))
-                        }
-                        _ => Err(Fault::Corporal(
-                            vec![],
-                            Problem::Shape(Expected::Struct, *b.clone()),
-                        )),
-                    },
+                    ("Structural", Some(b)) => {
+                        protos::Fault::incorporate(*b.clone()).map(Fault::Structural)
+                    }
                     ("Conceptual", Some(b)) => match b.as_ref() {
                         Datom::Struct(fields) if fields.len() == 2 => {
                             let path = Vec::<Integer>::incorporate(fields[0].clone())?;
@@ -948,10 +941,7 @@ impl Datomic for Fault {
             Fault::Structural(f) => Datom::Variant(
                 "Structural".to_owned(),
                 Separator::Period,
-                Some(Box::new(Datom::Struct(vec![
-                    Datom::Struct(vec![f.extent.0.datomize(), f.extent.1.datomize()]),
-                    Datom::Bare(format!("{:?}", f.problem)),
-                ]))),
+                Some(Box::new(f.datomize())),
             ),
             Fault::Conceptual(path, problem) => Datom::Variant(
                 "Conceptual".to_owned(),
@@ -974,6 +964,212 @@ impl Datomic for Fault {
 }
 
 // Datomic for Datom itself (identity)
+
+// ---------------------------------------------------------------------------
+// Datomic for protos structural types (Separator, Enclosure, Boundary, Extent, Problem, Fault)
+// ---------------------------------------------------------------------------
+
+impl Corporal<Datom> for Separator {
+    type Fault = Fault;
+    fn incorporate(datom: Datom) -> Result<Self, Fault> {
+        match &datom {
+            Datom::Bare(s) => match s.as_str() {
+                "Period" => Ok(Separator::Period),
+                "Exclamation" => Ok(Separator::Exclamation),
+                "Colon" => Ok(Separator::Colon),
+                _ => Err(Fault::Corporal(vec![], Problem::UnknownVariant(s.clone()))),
+            },
+            _ => Err(Fault::Corporal(
+                vec![],
+                Problem::Shape(Expected::Bare, datom),
+            )),
+        }
+    }
+}
+impl Datomic for Separator {
+    fn datomize(&self) -> Datom {
+        Datom::Bare(
+            match self {
+                Self::Period => "Period",
+                Self::Exclamation => "Exclamation",
+                Self::Colon => "Colon",
+            }
+            .to_owned(),
+        )
+    }
+}
+
+impl Corporal<Datom> for Enclosure {
+    type Fault = Fault;
+    fn incorporate(datom: Datom) -> Result<Self, Fault> {
+        match &datom {
+            Datom::Bare(s) => match s.as_str() {
+                "Braced" => Ok(Enclosure::Braced),
+                "Bracketed" => Ok(Enclosure::Bracketed),
+                "Guillemets" => Ok(Enclosure::Guillemets),
+                "Angled" => Ok(Enclosure::Angled),
+                _ => Err(Fault::Corporal(vec![], Problem::UnknownVariant(s.clone()))),
+            },
+            _ => Err(Fault::Corporal(
+                vec![],
+                Problem::Shape(Expected::Bare, datom),
+            )),
+        }
+    }
+}
+impl Datomic for Enclosure {
+    fn datomize(&self) -> Datom {
+        Datom::Bare(
+            match self {
+                Self::Braced => "Braced",
+                Self::Bracketed => "Bracketed",
+                Self::Guillemets => "Guillemets",
+                Self::Angled => "Angled",
+            }
+            .to_owned(),
+        )
+    }
+}
+
+impl Corporal<Datom> for Boundary {
+    type Fault = Fault;
+    fn incorporate(datom: Datom) -> Result<Self, Fault> {
+        match &datom {
+            Datom::Bare(s) => match s.as_str() {
+                "CurlyQuotes" => Ok(Boundary::CurlyQuotes),
+                "Parentheses" => Ok(Boundary::Parentheses),
+                _ => Err(Fault::Corporal(vec![], Problem::UnknownVariant(s.clone()))),
+            },
+            _ => Err(Fault::Corporal(
+                vec![],
+                Problem::Shape(Expected::Bare, datom),
+            )),
+        }
+    }
+}
+impl Datomic for Boundary {
+    fn datomize(&self) -> Datom {
+        Datom::Bare(
+            match self {
+                Self::CurlyQuotes => "CurlyQuotes",
+                Self::Parentheses => "Parentheses",
+            }
+            .to_owned(),
+        )
+    }
+}
+
+impl Corporal<Datom> for Extent {
+    type Fault = Fault;
+    fn incorporate(datom: Datom) -> Result<Self, Fault> {
+        match datom {
+            Datom::Struct(fields) => {
+                if fields.len() != 2 {
+                    return Err(Fault::Corporal(
+                        vec![],
+                        Problem::Arity(2, fields.len() as Integer),
+                    ));
+                }
+                let start = Integer::incorporate(fields[0].clone())?;
+                let end = Integer::incorporate(fields[1].clone())?;
+                Ok(Extent(start, end))
+            }
+            _ => Err(Fault::Corporal(
+                vec![],
+                Problem::Shape(Expected::Struct, datom),
+            )),
+        }
+    }
+}
+impl Datomic for Extent {
+    fn datomize(&self) -> Datom {
+        Datom::Struct(vec![self.0.datomize(), self.1.datomize()])
+    }
+}
+
+impl Corporal<Datom> for protos::Problem {
+    type Fault = Fault;
+    fn incorporate(datom: Datom) -> Result<Self, Fault> {
+        match &datom {
+            Datom::Variant(head, sep, body) => {
+                if *sep != Separator::Period {
+                    return Err(Fault::Corporal(vec![], Problem::Separator(*sep)));
+                }
+                match (head.as_str(), body) {
+                    ("Unclosed", Some(b)) => {
+                        Enclosure::incorporate(*b.clone()).map(protos::Problem::Unclosed)
+                    }
+                    ("UnclosedBoundary", Some(b)) => {
+                        Boundary::incorporate(*b.clone()).map(protos::Problem::UnclosedBoundary)
+                    }
+                    _ => Err(Fault::Corporal(
+                        vec![],
+                        Problem::UnknownVariant(head.clone()),
+                    )),
+                }
+            }
+            Datom::Bare(s) => match s.as_str() {
+                "Unopened" => Ok(protos::Problem::Unopened),
+                "MissingBody" => Ok(protos::Problem::MissingBody),
+                "MissingHead" => Ok(protos::Problem::MissingHead),
+                "EmptyInput" => Ok(protos::Problem::EmptyInput),
+                _ => Err(Fault::Corporal(vec![], Problem::UnknownVariant(s.clone()))),
+            },
+            _ => Err(Fault::Corporal(
+                vec![],
+                Problem::Shape(Expected::Variant, datom),
+            )),
+        }
+    }
+}
+impl Datomic for protos::Problem {
+    fn datomize(&self) -> Datom {
+        match self {
+            protos::Problem::Unclosed(e) => Datom::Variant(
+                "Unclosed".to_owned(),
+                Separator::Period,
+                Some(Box::new(e.datomize())),
+            ),
+            protos::Problem::UnclosedBoundary(b) => Datom::Variant(
+                "UnclosedBoundary".to_owned(),
+                Separator::Period,
+                Some(Box::new(b.datomize())),
+            ),
+            protos::Problem::Unopened => Datom::Bare("Unopened".to_owned()),
+            protos::Problem::MissingBody => Datom::Bare("MissingBody".to_owned()),
+            protos::Problem::MissingHead => Datom::Bare("MissingHead".to_owned()),
+            protos::Problem::EmptyInput => Datom::Bare("EmptyInput".to_owned()),
+        }
+    }
+}
+
+impl Corporal<Datom> for protos::Fault {
+    type Fault = Fault;
+    fn incorporate(datom: Datom) -> Result<Self, Fault> {
+        match datom {
+            Datom::Struct(fields) => {
+                if fields.len() != 2 {
+                    return Err(Fault::Corporal(
+                        vec![],
+                        Problem::Arity(2, fields.len() as Integer),
+                    ));
+                }
+                let extent = Extent::incorporate(fields[0].clone())?;
+                let problem = protos::Problem::incorporate(fields[1].clone())?;
+                Ok(protos::Fault { extent, problem })
+            }
+            _ => Err(Fault::Corporal(
+                vec![],
+                Problem::Shape(Expected::Struct, datom),
+            )),
+        }
+    }
+}
+impl Datomic for protos::Fault {
+    fn datomize(&self) -> Datom {
+        Datom::Struct(vec![self.extent.datomize(), self.problem.datomize()])
+    }
+}
 impl Corporal<Datom> for Datom {
     type Fault = Fault;
     fn incorporate(datom: Datom) -> Result<Self, Fault> {
