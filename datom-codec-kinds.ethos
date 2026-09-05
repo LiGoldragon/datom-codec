@@ -1,12 +1,18 @@
 ; datomic: the kind every corporate type bears, the kind a scalar bears, and the kinds a reader is handed.
-; A constraint names its parameter (Datomic, Sized); Site, Positions and Variant are the crate's borrowed handles.
+; A constraint names its parameter (Datomic, Sized). Site, Positions and
+; Variant are borrowed handles; Worded::from_word and Sited::word also expose
+; borrowed Rust forms. Ethos has no declaration form for those references, so
+; they are omitted rather than represented as owned Text. Datomic's associated
+; Fault = Infallible equality is likewise not expressible, although its two
+; actual superkinds are recorded.
 Kinds
-[ protos:[ Integer Situation ]
+[ std::string:String
+  protos:[ Integer Situation Conceivable Textualizable ]
   crate:[ Datom Fault Expected Found Problem Site Positions Variant ] ]
-[ Datomic.{ [ Sized ] [] [] [ incorporate:{ [ Site ] [ Result<Self Fault> ] } ] }
-  Worded.{ [ Sized ] [] [ EXPECTED.Expected ] [ from_word:{ [ Text ] [ Option<Self> ] } to_word.[ Text ] incorporate_word:{ [ Site ] [ Result<Self Fault> ] } conceive_word.[ Datom ] ] }
-  Sited.[ positions.{ [ Integer ] [ Result<Positions Fault> ] } elements.[ Result<Positions Fault> ] variant.[ Result<Variant Fault> ] word.{ [ Expected ] [ Result<Text Fault> ] } text.[ Result<Text Fault> ] found.[ Found ] refuse.{ [ Problem ] [ Fault ] } ]
+[ Datomic.{ [ Sized Conceivable<Datom> Textualizable<Datom> ] [] [] [ incorporate:{ [ Site ] [ Result<Self Fault> ] } ] }
+  Worded.{ [ Sized ] [] [ EXPECTED.Expected ] [ to_word.[ String ] incorporate_word:{ [ Site ] [ Result<Self Fault> ] } conceive_word.[ Datom ] ] }
+  Sited.[ positions.{ [ Integer ] [ Result<Positions Fault> ] } elements.[ Result<Positions Fault> ] variant.[ Result<Variant Fault> ] text.[ Result<Text Fault> ] found.[ Found ] refuse.{ [ Problem ] [ Fault ] } ]
   Positional<Datomic>.[ position![ Result<Datomic Fault> ] ]
   Counted.[ remaining.[ Integer ] ]
   Carrying<Datomic>.[ body.[ Result<Datomic Fault> ] ]
-  Headed.{ [ Sized ] [] [] [ positions.{ [ Integer ] [ Result<Positions Fault> ] } nothing.[ Result<Self Fault> ] ] } ]
+  Headed.{ [ Sized ] [] [] [ positions.{ [ Integer ] [ Result<Positions Fault> ] } nothing.[ Result<Self Fault> ] reject.{ [ Problem ] [ Fault ] } ] } ]

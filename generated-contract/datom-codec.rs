@@ -6,7 +6,7 @@ pub enum Datom {
     Vector(Vec<Datom>),
     Text(protos::Text),
     Meaning(protos::Opaque),
-    Word(DatomWord),
+    Word(crate::DatomWord),
 }
 impl datom_codec::Datomic for Datom {
     fn incorporate(site: datom_codec::Site<'_>) -> Result<Self, datom_codec::Fault> {
@@ -81,7 +81,6 @@ impl datom_codec::Datomic for Datom {
         }
     }
 }
-pub type DatomWord = protos::Word;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WordRefusal {
     Bare(protos::BareRefusal),
@@ -503,6 +502,8 @@ const _: () = {
     let _ = assert_datom_textualizable::<Datom>;
     fn assert_datom_protosizable<T: protos::Protosizable>() {}
     let _ = assert_datom_protosizable::<Datom>;
+    fn assert_datom_conceivable_datom<T: protos::Conceivable<Datom>>() {}
+    let _ = assert_datom_conceivable_datom::<Datom>;
 };
 const _: () = {
     fn assert_meaning_datomic<T: crate::Datomic>() {}
