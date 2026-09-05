@@ -1,6 +1,105 @@
 //! The types of the dialect: the concept, the meaning, and the faults.
 
-use protos::{Extent, Integer, Opaque, Path, Symbol, Text, Word};
+use protos::{BareRefusal, Classifying, Extent, Glyph, Integer, Opaque, Path, Symbol, Text, Word};
+
+/// A datom word that has one canonical concept.
+///
+/// A word whose root structural separator is a period is a variant in Datom,
+/// not a word. Keeping that distinction here prevents public construction of
+/// two concepts with the same canonical text.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DatomWord(Word);
+
+/// Why a Protos word cannot occupy the Datom word position directly.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WordRefusal {
+    /// The source did not form a Protos word run.
+    Bare(BareRefusal),
+    /// Its root delineation is a period-headed variant.
+    Period(Word),
+}
+
+/// The named behavior that examines a word's root structural separator.
+trait Rooting {
+    fn root_period(&self) -> bool;
+}
+
+impl Rooting for str {
+    fn root_period(&self) -> bool {
+        let mut first = None;
+        let mut separated = false;
+        let mut before = false;
+        for glyph in self.chars() {
+            if let Glyph::Separate(separator) = glyph.classify() {
+                if !before || separated {
+                    return false;
+                }
+                first.get_or_insert(separator);
+                separated = true;
+            } else {
+                before = true;
+                separated = false;
+            }
+        }
+        !separated && matches!(first, Some(protos::Separator::Period))
+    }
+}
+
+impl TryFrom<Word> for DatomWord {
+    type Error = WordRefusal;
+
+    fn try_from(word: Word) -> Result<Self, Self::Error> {
+        if word.as_ref().root_period() {
+            Err(WordRefusal::Period(word))
+        } else {
+            Ok(Self(word))
+        }
+    }
+}
+
+impl TryFrom<&str> for DatomWord {
+    type Error = WordRefusal;
+
+    fn try_from(text: &str) -> Result<Self, Self::Error> {
+        Word::try_from(text)
+            .map_err(WordRefusal::Bare)
+            .and_then(Self::try_from)
+    }
+}
+
+impl AsRef<str> for DatomWord {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+/// The named ascent from one Protos word to its canonical Datom anatomy.
+pub(crate) trait WordProjecting {
+    fn project_word(self) -> Datom;
+}
+
+impl WordProjecting for Word {
+    fn project_word(self) -> Datom {
+        match DatomWord::try_from(self) {
+            Ok(word) => Datom::Word(word),
+            Err(WordRefusal::Period(word)) => {
+                let text = word.as_ref();
+                let (offset, _) = text
+                    .char_indices()
+                    .find(|(_, glyph)| {
+                        matches!(glyph.classify(), Glyph::Separate(protos::Separator::Period))
+                    })
+                    .expect("a period-root word contains a period");
+                let head = Symbol::try_from(&text[..offset])
+                    .expect("a period-root word has a symbol head");
+                let tail = Word::try_from(&text[offset + 1..])
+                    .expect("a period-root word has a word body");
+                Datom::Variant(head, Box::new(tail.project_word()))
+            }
+            Err(WordRefusal::Bare(_)) => unreachable!("a Word was already validated"),
+        }
+    }
+}
 
 /// The datom concept: what a protoform means in the dialect, before a type is known.
 pub enum Datom {
@@ -15,7 +114,7 @@ pub enum Datom {
     /// Parenthesized meaning.
     Meaning(Opaque),
     /// A bare word: the position decides what it is.
-    Word(Word),
+    Word(DatomWord),
 }
 
 /// A structured string; today a plain text, its structure still to be designed.

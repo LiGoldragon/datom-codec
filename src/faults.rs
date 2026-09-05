@@ -4,7 +4,7 @@ use std::convert::Infallible;
 
 use protos::{Conceivable, Extent, Integer, Path, Pathed, Situated, Situation, Symbol, Text, Word};
 
-use crate::anatomy::{Datom, Fault, Locus, Problem};
+use crate::anatomy::{Datom, Fault, Locus, Problem, WordProjecting};
 use crate::kinds::{Carrying, Datomic, Headed, Positional, Sited};
 use crate::site::Site;
 
@@ -201,16 +201,16 @@ impl Conceivable<Datom> for Problem {
                 expected.conceive()?.1,
                 found.conceive()?.1,
             ])),
-            Self::UnknownVariant(name) => "UnknownVariant".carrying(Datom::Word(name.clone())),
+            Self::UnknownVariant(name) => "UnknownVariant".carrying(name.clone().project_word()),
             Self::Value(value) => "Value".carrying(Datom::Meaning(value.clone())),
             Self::Formless(found) => "Formless".carrying(found.conceive()?.1),
             Self::OneValue(count) => "OneValue".carrying(count.conceive()?.1),
-            Self::Exhausted => {
-                Datom::Word(Word::try_from("Exhausted").expect("Exhausted is a word"))
-            }
-            Self::BudgetExhausted => {
-                Datom::Word(Word::try_from("BudgetExhausted").expect("BudgetExhausted is a word"))
-            }
+            Self::Exhausted => Word::try_from("Exhausted")
+                .expect("Exhausted is a word")
+                .project_word(),
+            Self::BudgetExhausted => Word::try_from("BudgetExhausted")
+                .expect("BudgetExhausted is a word")
+                .project_word(),
         };
         Ok(Situated(
             Situation {

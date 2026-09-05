@@ -4,7 +4,7 @@ use std::{borrow::Cow, convert::Infallible};
 
 use protos::{Conceivable, Integer, Opaque, Text, Textualizable, Word};
 
-use crate::anatomy::{Datom, Expected, Fault, Found, Problem};
+use crate::anatomy::{Datom, Expected, Fault, Found, Problem, WordProjecting};
 use crate::site::{Positions, Site, Variant};
 
 /// The kind every corporate type of the dialect bears.
@@ -36,7 +36,9 @@ pub trait Worded: Sized {
     }
     /// The datom of the value: its word.
     fn conceive_word(&self) -> Datom {
-        Datom::Word(Word::try_from(self.to_word()).expect("a scalar word is a word run"))
+        Word::try_from(self.to_word())
+            .expect("a scalar word is a word run")
+            .project_word()
     }
 }
 

@@ -5,14 +5,22 @@ mod common;
 
 use common::*;
 use datom_codec::{
-    Actualizable, Conceivable, Datom, Datomic, Decimal, Expected, Found, Meaning, Opaque,
-    Potential, Problem, Protosizable, Refusal, Situated, Text, Textualizable,
+    Actualizable, Conceivable, Datom, DatomWord, Datomic, Decimal, Expected, Found, Meaning,
+    Opaque, Potential, Problem, Protosizable, Refusal, Situated, Text, Textualizable, WordRefusal,
 };
 use proptest::prelude::*;
 use protos::{Symbol, Word};
 
 fn word(text: &str) -> Datom {
-    Datom::Word(Word::try_from(text).unwrap())
+    match DatomWord::try_from(text) {
+        Ok(word) => Datom::Word(word),
+        Err(WordRefusal::Period(raw)) => {
+            let text = raw.as_ref();
+            let (head, body) = text.split_once('.').unwrap();
+            variant(head, word(body))
+        }
+        Err(WordRefusal::Bare(refusal)) => panic!("invalid test word: {refusal:?}"),
+    }
 }
 
 fn variant(name: &str, body: Datom) -> Datom {
@@ -214,6 +222,28 @@ fn the_concept_is_situated_by_the_reader_and_by_the_writer() {
         "{ Ada [ 12 7 -3 ] }".protosize().unwrap().0[0].0
     );
     assert_eq!(datom.textualize(), text);
+}
+
+#[test]
+fn words_admit_only_one_canonical_datom_anatomy() {
+    for text in ["a.b", "a.b:c", "a.b.c"] {
+        let period = Word::try_from(text).unwrap();
+        assert_eq!(
+            DatomWord::try_from(period.clone()),
+            Err(WordRefusal::Period(period)),
+            "{text:?}"
+        );
+    }
+    for text in ["a:b", "a!b", "a:b.c", "a!b.c", "a..b", ".a", "a."] {
+        let datom = variant("Some", word(text));
+        let back: Datom = datom.protosize().unwrap().conceive().unwrap().1;
+        assert_eq!(back, datom, "{text:?}");
+    }
+    for value in [3.25, -42.0, 0.5] {
+        let decimal = Decimal::try_from(value).unwrap().conceive().unwrap().1;
+        let back: Datom = decimal.protosize().unwrap().conceive().unwrap().1;
+        assert_eq!(back, decimal, "{value}");
+    }
 }
 
 #[test]

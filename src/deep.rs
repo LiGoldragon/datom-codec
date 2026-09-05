@@ -140,7 +140,7 @@ enum Show<'a> {
     Datom(&'a Datom),
     Text(&'static str),
     Symbol(&'a protos::Symbol),
-    Word(&'a protos::Word),
+    Word(&'a crate::anatomy::DatomWord),
     Plain(&'a protos::Text),
     Meaning(&'a protos::Opaque),
 }

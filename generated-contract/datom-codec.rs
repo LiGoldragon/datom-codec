@@ -6,7 +6,7 @@ pub enum Datom {
     Vector(Vec<Datom>),
     Text(protos::Text),
     Meaning(protos::Opaque),
-    Word(protos::Word),
+    Word(DatomWord),
 }
 impl datom_codec::Datomic for Datom {
     fn incorporate(site: datom_codec::Site<'_>) -> Result<Self, datom_codec::Fault> {
@@ -75,6 +75,45 @@ impl datom_codec::Datomic for Datom {
             Self::Word(p0) => {
                 datom_codec::Datom::Variant(
                     "Word".to_owned(),
+                    Box::new(datom_codec::Datomic::conceive(p0)),
+                )
+            }
+        }
+    }
+}
+pub type DatomWord = protos::Word;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WordRefusal {
+    Bare(protos::BareRefusal),
+    Period(protos::Word),
+}
+impl datom_codec::Datomic for WordRefusal {
+    fn incorporate(site: datom_codec::Site<'_>) -> Result<Self, datom_codec::Fault> {
+        let v = datom_codec::Sited::variant(site)?;
+        match v.name {
+            "Bare" => Ok(Self::Bare(datom_codec::Carrying::body(v)?)),
+            "Period" => Ok(Self::Period(datom_codec::Carrying::body(v)?)),
+            _ => {
+                Err(
+                    datom_codec::Sited::refuse(
+                        site,
+                        datom_codec::Problem::UnknownVariant(v.name.to_owned()),
+                    ),
+                )
+            }
+        }
+    }
+    fn conceive(&self) -> datom_codec::Datom {
+        match self {
+            Self::Bare(p0) => {
+                datom_codec::Datom::Variant(
+                    "Bare".to_owned(),
+                    Box::new(datom_codec::Datomic::conceive(p0)),
+                )
+            }
+            Self::Period(p0) => {
+                datom_codec::Datom::Variant(
+                    "Period".to_owned(),
                     Box::new(datom_codec::Datomic::conceive(p0)),
                 )
             }

@@ -20,7 +20,8 @@ mod site;
 mod worded;
 
 pub use anatomy::{
-    Datom, Expected, Fault, Found, IncorporationBudget, Locus, Meaning, Potential, Problem,
+    Datom, DatomWord, Expected, Fault, Found, IncorporationBudget, Locus, Meaning, Potential,
+    Problem, WordRefusal,
 };
 pub use kinds::{Carrying, Counted, Datomic, Headed, Positional, Sited, Worded};
 pub use site::{Positions, Site, Variant};

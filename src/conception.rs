@@ -6,7 +6,7 @@ use protos::{
     Separator, Situated, Situation, Textualizable, Word,
 };
 
-use crate::anatomy::{Datom, Fault, Found, Locus, Problem};
+use crate::anatomy::{Datom, Fault, Found, Locus, Problem, WordProjecting};
 
 /// What a finished node becomes, once its children are built.
 enum Node<'a> {
@@ -91,7 +91,10 @@ impl<'a> Walking<'a> for Walk<'a> {
                 });
             }
             Protoform::Headed(Head::Symbol(_), _, _) if form.is_word_chain() => {
-                self.leaf(Datom::Word(Word::try_from(form.textualize()).unwrap()), at);
+                self.leaf(
+                    Word::try_from(form.textualize()).unwrap().project_word(),
+                    at,
+                );
             }
             Protoform::Headed(Head::Symbol(_), _, _) => return Err(self.formless(Found::Chain, at)),
             Protoform::Headed(Head::Qualified(..), _, _) | Protoform::Qualified(..) => {
@@ -122,7 +125,7 @@ impl<'a> Walking<'a> for Walk<'a> {
             Protoform::Quoted(text) => self.leaf(Datom::Text(text.clone()), at),
             Protoform::Parenthesized(text) => self.leaf(Datom::Meaning(text.clone()), at),
             Protoform::Bare(bare) => {
-                self.leaf(Datom::Word(Word::try_from(bare.as_ref()).unwrap()), at)
+                self.leaf(Word::try_from(bare.as_ref()).unwrap().project_word(), at)
             }
         }
         Ok(())
@@ -136,7 +139,7 @@ impl<'a> Walking<'a> for Walk<'a> {
                 let body = datoms
                     .into_iter()
                     .next()
-                    .unwrap_or(Datom::Word(Word::try_from("_").unwrap()));
+                    .unwrap_or(Word::try_from("_").unwrap().project_word());
                 children.insert(
                     0,
                     Situation {
@@ -182,7 +185,7 @@ impl<'a> Walking<'a> for Walk<'a> {
         let datom = self
             .datoms
             .pop()
-            .unwrap_or(Datom::Word(Word::try_from("_").unwrap()));
+            .unwrap_or(Word::try_from("_").unwrap().project_word());
         let situation = self.situations.pop().unwrap_or(Situation {
             extent: Extent(0, 0),
             children: vec![],

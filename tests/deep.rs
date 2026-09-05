@@ -1,10 +1,10 @@
-use datom_codec::Datom;
-use protos::{Symbol, Word};
+use datom_codec::{Datom, DatomWord};
+use protos::Symbol;
 
 const DEPTH: usize = 20_000;
 
 fn deep() -> Datom {
-    let mut datom = Datom::Word(Word::try_from("leaf").expect("leaf is word"));
+    let mut datom = Datom::Word(DatomWord::try_from("leaf").expect("leaf is datom word"));
     for _ in 0..DEPTH {
         datom = Datom::Variant(
             Symbol::try_from("Node").expect("Node is a symbol"),

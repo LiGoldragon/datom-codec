@@ -2,8 +2,8 @@
 #![allow(dead_code)]
 
 use datom_codec::{
-    Carrying, Conceivable, Datom, Datomic, Fault, Headed, Meaning, Opaque, Positional, Problem,
-    Site, Sited, Situated, Situation, Text, Word,
+    Carrying, Conceivable, Datom, DatomWord, Datomic, Fault, Headed, Meaning, Opaque, Positional,
+    Problem, Site, Sited, Situated, Situation, Text, Word, WordRefusal,
 };
 use std::convert::Infallible;
 
@@ -20,7 +20,14 @@ fn variant(name: &str, body: Datom) -> Datom {
     Datom::Variant(protos::Symbol::try_from(name).unwrap(), Box::new(body))
 }
 fn word(name: &str) -> Datom {
-    Datom::Word(Word::try_from(name).unwrap())
+    match DatomWord::try_from(name) {
+        Ok(word) => Datom::Word(word),
+        Err(WordRefusal::Period(raw)) => {
+            let (head, body) = raw.as_ref().split_once('.').unwrap();
+            variant(head, word(body))
+        }
+        Err(WordRefusal::Bare(refusal)) => panic!("invalid test word: {refusal:?}"),
+    }
 }
 fn datum<T: Conceivable<Datom, Fault = Infallible>>(value: &T) -> Datom {
     match value.conceive() {

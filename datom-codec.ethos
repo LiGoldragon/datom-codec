@@ -5,9 +5,11 @@
 ; storage form; their omission is deliberate rather than a false Text shape.
 ; The generic bearers of Datomic (Vector, Option, Result, Box of a Datomic) have no association form.
 Types
-[ protos:[ Integer Extent Path Separator Enclosure Boundary StructuralProblem.Problem StructuralFault.Fault Symbol Word Opaque Text Textualizable Protosizable ]
+[ protos:[ BareRefusal Integer Extent Path Separator Enclosure Boundary StructuralProblem.Problem StructuralFault.Fault Symbol Word Opaque Text Textualizable Protosizable ]
   crate:[ Datomic Worded ] ]
-[ Datom.[ Variant.{ Symbol Datom } Struct.Vector<Datom> Vector.Vector<Datom> Text.Text Meaning.Opaque Word.Word ]
+[ Datom.[ Variant.{ Symbol Datom } Struct.Vector<Datom> Vector.Vector<Datom> Text.Text Meaning.Opaque Word.DatomWord ]
+  DatomWord.Word
+  WordRefusal.[ Bare.BareRefusal Period.Word ]
   Meaning.[ Plain.Opaque ]
   Expected.[ Variant Struct Vector Text Meaning Integer Decimal Boolean Word ]
   Found.[ Variant Struct Vector Text Meaning Word Angled Qualified Chain ]

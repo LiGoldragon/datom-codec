@@ -4,7 +4,7 @@ use std::convert::Infallible;
 
 use protos::{Classifying, Conceivable, Glyph, Situated, Situation, Symbol, Text, Word};
 
-use crate::anatomy::{Datom, Expected, Fault, Meaning, Problem};
+use crate::anatomy::{Datom, Expected, Fault, Meaning, Problem, WordProjecting};
 use crate::kinds::{Carrying, Counted, Datomic, Headed, Positional, Sited};
 use crate::site::{Incorporating, Site};
 
@@ -76,7 +76,9 @@ impl Conceivable<Datom> for Text {
 
     fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
         let datom = if self.is_bare() {
-            Datom::Word(Word::try_from(self.as_ref()).expect("bare text is a word run"))
+            Word::try_from(self.as_ref())
+                .expect("bare text is a word run")
+                .project_word()
         } else {
             Datom::Text(self.clone())
         };
@@ -166,7 +168,7 @@ impl<T: Datomic> Conceivable<Datom> for Option<T> {
                 Symbol::try_from("Some").unwrap(),
                 Box::new(value.conceive()?.1.carried()),
             ),
-            None => Datom::Word(Word::try_from("None").unwrap()),
+            None => Word::try_from("None").unwrap().project_word(),
         };
         Ok(Situated(
             Situation {

@@ -8,7 +8,7 @@ use protos::{
     Separator, Situated, Situating, Situation, Symbol, Word,
 };
 
-use crate::anatomy::Datom;
+use crate::anatomy::{Datom, DatomWord};
 
 /// What a finished node becomes, once its children are built.
 enum Node<'a> {
@@ -65,6 +65,14 @@ impl BareForming for Word {
             );
         }
         form
+    }
+}
+
+impl BareForming for DatomWord {
+    fn bare_form(&self) -> Protoform {
+        Word::try_from(self.as_ref())
+            .expect("a Datom word remains a Protos word")
+            .bare_form()
     }
 }
 
