@@ -1,13 +1,15 @@
 //! Text, meaning and the containers: each bears Datomic by the position rule.
 
-use protos::{Classifying, Glyph, Text};
+use std::convert::Infallible;
+
+use protos::{Classifying, Conceivable, Glyph, Situated, Situation, Symbol, Text, Word};
 
 use crate::anatomy::{Datom, Expected, Fault, Meaning, Problem};
 use crate::kinds::{Carrying, Counted, Datomic, Headed, Positional, Sited};
-use crate::site::Site;
+use crate::site::{Incorporating, Site};
 
 /// The kind whose capability says whether text writes bare: a non-empty run of plain and separator glyphs.
-trait Bare {
+trait BareText {
     fn is_bare(&self) -> bool;
 }
 
@@ -19,9 +21,9 @@ trait Carryable {
 impl Carryable for Datom {
     fn carried(self) -> Self {
         if let Self::Word(word) = &self {
-            if word.needs_quotes_as_a_payload() {
+            if word.as_ref().needs_quotes_as_a_payload() {
                 return Self::Text(
-                    Text::try_from(word.as_str())
+                    Text::try_from(word.as_ref())
                         .expect("a bare word cannot contain a closing quote"),
                 );
             }
@@ -52,7 +54,7 @@ impl Payload for str {
     }
 }
 
-impl Bare for str {
+impl BareText for str {
     fn is_bare(&self) -> bool {
         for glyph in self.chars() {
             if !matches!(glyph.classify(), Glyph::Plain | Glyph::Separate(_)) {
@@ -67,13 +69,24 @@ impl Datomic for Text {
     fn incorporate(site: Site<'_>) -> Result<Self, Fault> {
         site.text()
     }
+}
 
-    fn conceive(&self) -> Datom {
-        if self.is_bare() {
-            Datom::Word(self.to_string())
+impl Conceivable<Datom> for Text {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
+        let datom = if self.is_bare() {
+            Datom::Word(Word::try_from(self.as_ref()).expect("bare text is a word run"))
         } else {
             Datom::Text(self.clone())
-        }
+        };
+        Ok(Situated(
+            Situation {
+                extent: protos::Extent(0, 0),
+                children: vec![],
+            },
+            datom,
+        ))
     }
 }
 
@@ -84,11 +97,20 @@ impl Datomic for Meaning {
             _ => Err(site.refuse(Problem::Shape(Expected::Meaning, site.found()))),
         }
     }
+}
 
-    fn conceive(&self) -> Datom {
-        match self {
-            Meaning::Plain(text) => Datom::Meaning(text.clone()),
-        }
+impl Conceivable<Datom> for Meaning {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
+        let Meaning::Plain(text) = self;
+        Ok(Situated(
+            Situation {
+                extent: protos::Extent(0, 0),
+                children: vec![],
+            },
+            Datom::Meaning(text.clone()),
+        ))
     }
 }
 
@@ -101,9 +123,23 @@ impl<T: Datomic> Datomic for Vec<T> {
         }
         Ok(values)
     }
+}
 
-    fn conceive(&self) -> Datom {
-        Datom::Vector(self.iter().map(T::conceive).collect())
+impl<T: Datomic> Conceivable<Datom> for Vec<T> {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
+        let values = self
+            .iter()
+            .map(|value| value.conceive().map(|situated| situated.1))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Situated(
+            Situation {
+                extent: protos::Extent(0, 0),
+                children: vec![],
+            },
+            Datom::Vector(values),
+        ))
     }
 }
 
@@ -116,15 +152,29 @@ impl<T: Datomic> Datomic for Option<T> {
                 variant.nothing()?;
                 Ok(None)
             }
-            other => Err(site.refuse(Problem::UnknownVariant(other.to_owned()))),
+            other => Err(variant.reject(Problem::UnknownVariant(Word::try_from(other).unwrap()))),
         }
     }
+}
 
-    fn conceive(&self) -> Datom {
-        match self {
-            Some(value) => Datom::Variant("Some".to_owned(), Box::new(value.conceive().carried())),
-            None => Datom::Word("None".to_owned()),
-        }
+impl<T: Datomic> Conceivable<Datom> for Option<T> {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
+        let datom = match self {
+            Some(value) => Datom::Variant(
+                Symbol::try_from("Some").unwrap(),
+                Box::new(value.conceive()?.1.carried()),
+            ),
+            None => Datom::Word(Word::try_from("None").unwrap()),
+        };
+        Ok(Situated(
+            Situation {
+                extent: protos::Extent(0, 0),
+                children: vec![],
+            },
+            datom,
+        ))
     }
 }
 
@@ -134,24 +184,37 @@ impl<T: Datomic, E: Datomic> Datomic for Result<T, E> {
         match variant.name {
             "Ok" => Ok(Ok(variant.body()?)),
             "Err" => Ok(Err(variant.body()?)),
-            other => Err(site.refuse(Problem::UnknownVariant(other.to_owned()))),
+            other => Err(variant.reject(Problem::UnknownVariant(Word::try_from(other).unwrap()))),
         }
     }
+}
 
-    fn conceive(&self) -> Datom {
-        match self {
-            Ok(value) => Datom::Variant("Ok".to_owned(), Box::new(value.conceive().carried())),
-            Err(error) => Datom::Variant("Err".to_owned(), Box::new(error.conceive().carried())),
-        }
+impl<T: Datomic, E: Datomic> Conceivable<Datom> for Result<T, E> {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
+        let datom = match self {
+            Ok(value) => Datom::Variant(
+                Symbol::try_from("Ok").unwrap(),
+                Box::new(value.conceive()?.1.carried()),
+            ),
+            Err(error) => Datom::Variant(
+                Symbol::try_from("Err").unwrap(),
+                Box::new(error.conceive()?.1.carried()),
+            ),
+        };
+        Ok(Situated(
+            Situation {
+                extent: protos::Extent(0, 0),
+                children: vec![],
+            },
+            datom,
+        ))
     }
 }
 
 impl<T: Datomic> Datomic for Box<T> {
     fn incorporate(site: Site<'_>) -> Result<Self, Fault> {
-        T::incorporate(site).map(Box::new)
-    }
-
-    fn conceive(&self) -> Datom {
-        self.as_ref().conceive()
+        site.corporate().map(Box::new)
     }
 }

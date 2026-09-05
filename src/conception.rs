@@ -2,15 +2,15 @@
 //! one iterative walk that carries the path down and the built nodes up.
 
 use protos::{
-    Boundary, Conceivable, Delineation, Enclosure, Extent, Head, Integer, Locating, Path,
-    Protoform, Separator, Situated, Situation, Text, Textualizable,
+    Conceivable, Delineation, Enclosure, Extent, Head, Integer, Locating, Path, Protoform,
+    Separator, Situated, Situation, Textualizable, Word,
 };
 
 use crate::anatomy::{Datom, Fault, Found, Locus, Problem};
 
 /// What a finished node becomes, once its children are built.
 enum Node<'a> {
-    Variant(&'a str),
+    Variant(&'a protos::Symbol),
     Struct,
     Vector,
 }
@@ -49,7 +49,7 @@ impl Wordy for Protoform {
         let mut here = self;
         loop {
             match here {
-                Protoform::Bare(Head::Symbol(_)) => return true,
+                Protoform::Bare(_) => return true,
                 Protoform::Headed(Head::Symbol(_), _, body) => here = body,
                 _ => return false,
             }
@@ -91,10 +91,10 @@ impl<'a> Walking<'a> for Walk<'a> {
                 });
             }
             Protoform::Headed(Head::Symbol(_), _, _) if form.is_word_chain() => {
-                self.leaf(Datom::Word(form.textualize()), at);
+                self.leaf(Datom::Word(Word::try_from(form.textualize()).unwrap()), at);
             }
             Protoform::Headed(Head::Symbol(_), _, _) => return Err(self.formless(Found::Chain, at)),
-            Protoform::Headed(Head::Qualified(..), _, _) | Protoform::Bare(Head::Qualified(..)) => {
+            Protoform::Headed(Head::Qualified(..), _, _) | Protoform::Qualified(..) => {
                 return Err(self.formless(Found::Qualified, at));
             }
             Protoform::Enclosed(Enclosure::Angled, _) => {
@@ -119,15 +119,11 @@ impl<'a> Walking<'a> for Walk<'a> {
                     });
                 }
             }
-            Protoform::Opaque(Boundary::CurlyQuotes, text) => {
-                let text = Text::try_from(text.as_ref())
-                    .expect("a curly-quoted payload cannot contain its terminator");
-                self.leaf(Datom::Text(text), at)
+            Protoform::Quoted(text) => self.leaf(Datom::Text(text.clone()), at),
+            Protoform::Parenthesized(text) => self.leaf(Datom::Meaning(text.clone()), at),
+            Protoform::Bare(bare) => {
+                self.leaf(Datom::Word(Word::try_from(bare.as_ref()).unwrap()), at)
             }
-            Protoform::Opaque(Boundary::Parentheses, text) => {
-                self.leaf(Datom::Meaning(text.clone()), at)
-            }
-            Protoform::Bare(Head::Symbol(symbol)) => self.leaf(Datom::Word(symbol.clone()), at),
         }
         Ok(())
     }
@@ -140,7 +136,7 @@ impl<'a> Walking<'a> for Walk<'a> {
                 let body = datoms
                     .into_iter()
                     .next()
-                    .unwrap_or(Datom::Word(String::new()));
+                    .unwrap_or(Datom::Word(Word::try_from("_").unwrap()));
                 children.insert(
                     0,
                     Situation {
@@ -148,7 +144,7 @@ impl<'a> Walking<'a> for Walk<'a> {
                         children: vec![],
                     },
                 );
-                Datom::Variant(head.to_owned(), Box::new(body))
+                Datom::Variant(head.clone(), Box::new(body))
             }
             Node::Struct => Datom::Struct(datoms),
             Node::Vector => Datom::Vector(datoms),
@@ -183,7 +179,10 @@ impl<'a> Walking<'a> for Walk<'a> {
                 Step::Finish { node, arity, at } => self.finish(node, arity, at),
             }
         }
-        let datom = self.datoms.pop().unwrap_or(Datom::Word(String::new()));
+        let datom = self
+            .datoms
+            .pop()
+            .unwrap_or(Datom::Word(Word::try_from("_").unwrap()));
         let situation = self.situations.pop().unwrap_or(Situation {
             extent: Extent(0, 0),
             children: vec![],

@@ -4,15 +4,15 @@
 use std::convert::Infallible;
 
 use protos::{
-    Boundary, Classifying, Delineation, Enclosure, Glyph, Head, Protoform, Protosizable, Separator,
-    Situated, Situating, Textualizable,
+    Bare, Classifying, Conceivable, Delineation, Enclosure, Glyph, Head, Protoform, Protosizable,
+    Separator, Situated, Situating, Situation, Symbol, Word,
 };
 
 use crate::anatomy::Datom;
 
 /// What a finished node becomes, once its children are built.
 enum Node<'a> {
-    Variant(&'a str),
+    Variant(&'a Symbol),
     Struct,
     Vector,
 }
@@ -37,25 +37,32 @@ trait BareForming {
     fn bare_form(&self) -> Protoform;
 }
 
-impl BareForming for str {
+impl BareForming for Word {
     fn bare_form(&self) -> Protoform {
+        let text = self.as_ref();
         let mut pieces = Vec::new();
         let mut start = 0;
-        for (offset, glyph) in self.char_indices() {
+        for (offset, glyph) in text.char_indices() {
             if let Glyph::Separate(separator) = glyph.classify() {
-                pieces.push((&self[start..offset], separator));
+                pieces.push((&text[start..offset], separator));
                 start = offset + glyph.len_utf8();
             }
         }
         if pieces.is_empty()
             || pieces.iter().any(|(piece, _)| piece.is_empty())
-            || self[start..].is_empty()
+            || text[start..].is_empty()
         {
-            return Protoform::Bare(Head::Symbol(self.to_owned()));
+            return Protoform::Bare(
+                Bare::try_from(text).expect("a non-chain word is structurally bare"),
+            );
         }
-        let mut form = Protoform::Bare(Head::Symbol(self[start..].to_owned()));
+        let mut form = Protoform::Bare(Bare::try_from(&text[start..]).unwrap());
         for (piece, separator) in pieces.into_iter().rev() {
-            form = Protoform::Headed(Head::Symbol(piece.to_owned()), separator, Box::new(form));
+            form = Protoform::Headed(
+                Head::Symbol(Symbol::try_from(piece).unwrap()),
+                separator,
+                Box::new(form),
+            );
         }
         form
     }
@@ -83,13 +90,8 @@ impl<'a> Building<'a> for Build<'a> {
                 self.steps.push(Step::Finish(Node::Vector, elements.len()));
                 self.steps.extend(elements.iter().rev().map(Step::Visit));
             }
-            Datom::Text(text) => self.forms.push(Protoform::Opaque(
-                Boundary::CurlyQuotes,
-                String::from(text.clone()).into(),
-            )),
-            Datom::Meaning(text) => self
-                .forms
-                .push(Protoform::Opaque(Boundary::Parentheses, text.clone())),
+            Datom::Text(text) => self.forms.push(Protoform::Quoted(text.clone())),
+            Datom::Meaning(text) => self.forms.push(Protoform::Parenthesized(text.clone())),
             Datom::Word(word) => self.forms.push(word.bare_form()),
         }
     }
@@ -101,9 +103,9 @@ impl<'a> Building<'a> for Build<'a> {
                 let body = children
                     .into_iter()
                     .next()
-                    .unwrap_or(Protoform::Bare(Head::Symbol(String::new())));
+                    .unwrap_or(Protoform::Bare(Bare::try_from("_").unwrap()));
                 Protoform::Headed(
-                    Head::Symbol(head.to_owned()),
+                    Head::Symbol(head.clone()),
                     Separator::Period,
                     Box::new(body),
                 )
@@ -123,7 +125,7 @@ impl<'a> Building<'a> for Build<'a> {
         }
         self.forms
             .pop()
-            .unwrap_or(Protoform::Bare(Head::Symbol(String::new())))
+            .unwrap_or(Protoform::Bare(Bare::try_from("_").unwrap()))
     }
 }
 
@@ -153,8 +155,16 @@ impl Protosizable for Datom {
     }
 }
 
-impl Textualizable for Datom {
-    fn textualize(&self) -> String {
-        self.form().textualize()
+impl Conceivable<Datom> for Datom {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<Situated<Datom>, Self::Fault> {
+        Ok(Situated(
+            Situation {
+                extent: protos::Extent(0, 0),
+                children: vec![],
+            },
+            self.clone(),
+        ))
     }
 }

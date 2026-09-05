@@ -3,7 +3,7 @@
 Kinds
 [ protos:[ Integer Situation ]
   crate:[ Datom Fault Expected Found Problem Site Positions Variant ] ]
-[ Datomic.{ [ Sized ] [] [] [ incorporate:{ [ Site ] [ Result<Self Fault> ] } conceive.[ Datom ] textualize.[ Text ] ] }
+[ Datomic.{ [ Sized ] [] [] [ incorporate:{ [ Site ] [ Result<Self Fault> ] } ] }
   Worded.{ [ Sized ] [] [ EXPECTED.Expected ] [ from_word:{ [ Text ] [ Option<Self> ] } to_word.[ Text ] incorporate_word:{ [ Site ] [ Result<Self Fault> ] } conceive_word.[ Datom ] ] }
   Sited.[ positions.{ [ Integer ] [ Result<Positions Fault> ] } elements.[ Result<Positions Fault> ] variant.[ Result<Variant Fault> ] word.{ [ Expected ] [ Result<Text Fault> ] } text.[ Result<Text Fault> ] found.[ Found ] refuse.{ [ Problem ] [ Fault ] } ]
   Positional<Datomic>.[ position![ Result<Datomic Fault> ] ]

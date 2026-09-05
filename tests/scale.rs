@@ -4,7 +4,7 @@
 use std::process::Command;
 
 use datom_codec::{
-    Actualizable, Conceivable, Datom, Datomic, Potential, Protosizable, Textualizable,
+    Actualizable, Conceivable, Datom, IncorporationBudget, Potential, Protosizable, Textualizable,
 };
 
 const SIZES: [usize; 3] = [1_000, 10_000, 100_000];
@@ -46,7 +46,9 @@ fn probe(mode: &str, n: usize) {
         }
         "read-vector" => {
             let text = format!("[ {}]", "1 ".repeat(n));
-            let v: Vec<i64> = Potential::from(text.as_str()).actualize().unwrap();
+            let v: Vec<i64> = Potential::from(text.as_str())
+                .actualize(IncorporationBudget::try_from(n as i64 + 1).unwrap())
+                .unwrap();
             assert_eq!(v.len(), n);
         }
         "write-brackets" => {
@@ -54,15 +56,18 @@ fn probe(mode: &str, n: usize) {
             let text = Textualizable::textualize(&datom);
             assert_eq!(text.len(), 4 * n + 2);
             let Ok(delineation) = datom.protosize();
-            assert_eq!(Textualizable::textualize(&delineation), text);
+            assert_eq!(
+                Textualizable::<protos::Delineation>::textualize(&delineation),
+                text
+            );
             drop(delineation);
             drop(datom);
         }
         "write-vector" => {
             let v: Vec<i64> = vec![1; n];
-            let text = Datomic::textualize(&v);
+            let text = Textualizable::<Datom>::textualize(&v);
             assert_eq!(text.len(), 2 * n + 3);
-            let datom = v.conceive();
+            let datom = v.conceive().unwrap().1;
             let Ok(delineation) = datom.protosize();
             drop(delineation);
             drop(datom);

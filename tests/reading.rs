@@ -9,9 +9,18 @@ use datom_codec::{
     Potential, Problem, Protosizable, Refusal, Situated, Text, Textualizable,
 };
 use proptest::prelude::*;
+use protos::{Symbol, Word};
+
+fn word(text: &str) -> Datom {
+    Datom::Word(Word::try_from(text).unwrap())
+}
+
+fn variant(name: &str, body: Datom) -> Datom {
+    Datom::Variant(Symbol::try_from(name).unwrap(), Box::new(body))
+}
 
 fn read<T: Datomic>(text: &str) -> Result<T, datom_codec::Fault> {
-    Potential::<T>::from(text).actualize()
+    Potential::<T>::from(text).actualize(budget())
 }
 fn value_fault(f: &datom_codec::Fault) -> bool {
     matches!(f, datom_codec::Fault::Corporate(_, Problem::Value(_)))
@@ -190,16 +199,12 @@ fn meaning_keeps_a_curly_quote_closer_as_its_own_content() {
 fn the_concept_is_situated_by_the_reader_and_by_the_writer() {
     use datom_codec::Locating;
     let text = "{ Ada [ 12 7 -3 ] }";
-    let Situated(at, datom) = text.protosize().unwrap().conceive().unwrap();
+    let Situated(at, datom): Situated<Datom> = text.protosize().unwrap().conceive().unwrap();
     assert_eq!(
         datom,
         Datom::Struct(vec![
-            Datom::Word("Ada".to_owned()),
-            Datom::Vector(vec![
-                Datom::Word("12".to_owned()),
-                Datom::Word("7".to_owned()),
-                Datom::Word("-3".to_owned())
-            ])
+            word("Ada"),
+            Datom::Vector(vec![word("12"), word("7"), word("-3")])
         ])
     );
     assert_eq!(at.locate(&[1, 2]), Some(datom_codec::Extent(13, 15)));
@@ -214,7 +219,7 @@ fn the_concept_is_situated_by_the_reader_and_by_the_writer() {
 #[test]
 fn a_decimal_projection_has_the_anatomy_of_its_written_text() {
     let value = Decimal::try_from(3.25).unwrap();
-    let projected = value.conceive().protosize().unwrap();
+    let projected = value.conceive().unwrap().1.protosize().unwrap();
     let read = value.textualize().protosize().unwrap();
     assert_eq!(projected, read);
 }
@@ -222,13 +227,10 @@ fn a_decimal_projection_has_the_anatomy_of_its_written_text() {
 #[test]
 fn non_period_chains_are_words_and_period_chains_are_variants() {
     let text = "{ a:b Some.42 }";
-    let Situated(_, datom) = text.protosize().unwrap().conceive().unwrap();
+    let Situated(_, datom): Situated<Datom> = text.protosize().unwrap().conceive().unwrap();
     assert_eq!(
         datom,
-        Datom::Struct(vec![
-            Datom::Word("a:b".to_owned()),
-            Datom::Variant("Some".to_owned(), Box::new(Datom::Word("42".to_owned())))
-        ])
+        Datom::Struct(vec![word("a:b"), variant("Some", word("42"))])
     );
 }
 
@@ -250,28 +252,49 @@ fn text_payloads_preserve_the_variant_boundary() {
 
 #[test]
 fn fault_text_payloads_remain_data() {
-    let value = datom_codec::Problem::Value("a;b".to_owned());
+    let value = datom_codec::Problem::Value(Opaque::from("a;b"));
     let written = value.textualize();
     assert_eq!(read::<datom_codec::Problem>(&written).unwrap(), value);
 }
 
 #[test]
 fn exhausted_positions_refuse_without_moving_the_cursor() {
-    use datom_codec::{Counted, Positional, Sited};
+    use std::convert::Infallible;
 
-    let datom = Datom::Vector(vec![]);
-    let at = protos::Situation {
-        extent: protos::Extent(0, 2),
-        children: vec![],
-    };
-    let site = datom_codec::Site {
-        datom: &datom,
-        at: &at,
-    };
-    let mut positions = site.elements().unwrap();
-    let exhausted: Result<i64, _> = positions.position();
-    assert!(exhausted.is_err());
-    assert_eq!(positions.remaining(), 0);
+    use datom_codec::{Conceivable, Extent, Positional, Sited, Situated, Situation};
+
+    #[derive(Debug)]
+    struct RequiresOne;
+
+    impl Conceivable<Datom> for RequiresOne {
+        type Fault = Infallible;
+
+        fn conceive(&self) -> Result<Situated<Datom>, Self::Fault> {
+            Ok(Situated(
+                Situation {
+                    extent: Extent(0, 0),
+                    children: vec![],
+                },
+                Datom::Vector(vec![word("x")]),
+            ))
+        }
+    }
+
+    impl Datomic for RequiresOne {
+        fn incorporate(site: datom_codec::Site<'_>) -> Result<Self, datom_codec::Fault> {
+            let mut positions = site.elements()?;
+            let _: i64 = positions.position()?;
+            Ok(Self)
+        }
+    }
+
+    let fault = Potential::<RequiresOne>::from("[]")
+        .actualize(budget())
+        .unwrap_err();
+    assert!(matches!(
+        fault,
+        datom_codec::Fault::Corporate(_, Problem::Exhausted)
+    ));
 }
 
 proptest! {

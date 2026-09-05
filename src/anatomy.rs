@@ -1,9 +1,8 @@
 //! The types of the dialect: the concept, the meaning, and the faults.
 
-use protos::{Extent, Integer, Opaque, Path, Symbol, Text};
+use protos::{Extent, Integer, Opaque, Path, Symbol, Text, Word};
 
 /// The datom concept: what a protoform means in the dialect, before a type is known.
-#[derive(Debug, PartialEq, Eq)]
 pub enum Datom {
     /// A head, the dot, and a body: a variant carrying data.
     Variant(Symbol, Box<Datom>),
@@ -16,7 +15,7 @@ pub enum Datom {
     /// Parenthesized meaning.
     Meaning(Opaque),
     /// A bare word: the position decides what it is.
-    Word(String),
+    Word(Word),
 }
 
 /// A structured string; today a plain text, its structure still to be designed.
@@ -80,15 +79,17 @@ pub enum Problem {
     /// The struct has the wrong number of positions: expected, found.
     Arity(Integer, Integer),
     /// The variant name is not one of the type's.
-    UnknownVariant(Symbol),
+    UnknownVariant(Word),
     /// The word is not a value of the scalar.
-    Value(String),
+    Value(Opaque),
     /// A structure with no datom form.
     Formless(Found),
     /// The text holds this many top-level structures, not one.
     OneValue(Integer),
     /// A positional reader was asked for an absent position.
     Exhausted,
+    /// The caller's incorporation allowance is exhausted.
+    BudgetExhausted,
 }
 
 /// Where a fault is: its path from the root datom, and its extent in the text.
@@ -113,3 +114,32 @@ pub enum Fault {
 
 /// Text that may become a `T` through the datom concept.
 pub type Potential<T> = protos::Potential<T, Datom>;
+
+/// Caller-owned allowance for library-mediated corporate incorporation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IncorporationBudget {
+    remaining: Integer,
+}
+
+impl TryFrom<Integer> for IncorporationBudget {
+    type Error = ();
+
+    fn try_from(value: Integer) -> Result<Self, Self::Error> {
+        (value >= 0).then_some(Self { remaining: value }).ok_or(())
+    }
+}
+
+pub(crate) trait Budgeted {
+    fn consume(&mut self) -> bool;
+}
+
+impl Budgeted for IncorporationBudget {
+    fn consume(&mut self) -> bool {
+        if self.remaining == 0 {
+            false
+        } else {
+            self.remaining -= 1;
+            true
+        }
+    }
+}

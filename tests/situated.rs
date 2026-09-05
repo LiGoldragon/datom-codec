@@ -5,11 +5,24 @@ mod common;
 use common::*;
 use datom_codec::{
     Actualizable, Boundary, Datomic, Enclosure, Expected, Extent, Fault, Found, Locus, Pathed,
-    Potential, Problem, Text,
+    Potential, Problem, Text, Textualizable,
 };
+use protos::{Opaque, Word};
+
+fn incorporation_budget(value: i64) -> datom_codec::IncorporationBudget {
+    datom_codec::IncorporationBudget::try_from(value).unwrap()
+}
+
+fn value(text: &str) -> Problem {
+    Problem::Value(Opaque::from(text))
+}
+
+fn unknown(name: &str) -> Problem {
+    Problem::UnknownVariant(Word::try_from(name).unwrap())
+}
 
 fn fault<T: Datomic + std::fmt::Debug>(text: &str) -> Fault {
-    Potential::<T>::from(text).actualize().unwrap_err()
+    Potential::<T>::from(text).actualize(budget()).unwrap_err()
 }
 fn corporate(path: &[i64], extent: Extent, problem: Problem) -> Fault {
     Fault::Corporate(
@@ -39,7 +52,7 @@ fn a_bad_element_is_reported_at_its_own_extent() {
     let text = "[ 1 x ]";
     assert_eq!(
         fault::<Vec<i64>>(text),
-        corporate(&[1], at(text, "x"), Problem::Value("x".to_owned()))
+        corporate(&[1], at(text, "x"), value("x"))
     );
 }
 
@@ -47,10 +60,7 @@ fn a_bad_element_is_reported_at_its_own_extent() {
 fn a_bad_field_deep_in_the_person() {
     let text = "{ Ada 1990 { “12 Rue de la Paix” Paris 75002 } [ Author Reviewer.{ 2024 x } ] }";
     let f = fault::<Person>(text);
-    assert_eq!(
-        f,
-        corporate(&[3, 1, 1, 1], at(text, "x"), Problem::Value("x".to_owned()))
-    );
+    assert_eq!(f, corporate(&[3, 1, 1, 1], at(text, "x"), value("x")));
     assert_eq!(f.path(), &[3, 1, 1, 1]);
 }
 
@@ -60,11 +70,7 @@ fn three_deep_through_every_container() {
     let text = "{ [ None Some.Ok.Author Some.Ok.Reviewer.{ 1 x } ] }";
     assert_eq!(
         fault::<Deep>(text),
-        corporate(
-            &[0, 2, 1, 1, 1, 1],
-            at(text, "x"),
-            Problem::Value("x".to_owned())
-        )
+        corporate(&[0, 2, 1, 1, 1, 1], at(text, "x"), value("x"))
     );
     let text = "{ [ Some.Err.{ 1 } ] }";
     assert_eq!(
@@ -78,20 +84,12 @@ fn three_deep_through_every_container() {
     let text = "{ [ Some.Ok.Nope ] }";
     assert_eq!(
         fault::<Deep>(text),
-        corporate(
-            &[0, 0, 1, 1],
-            at(text, "Nope"),
-            Problem::UnknownVariant("Nope".to_owned())
-        )
+        corporate(&[0, 0, 1, 1], at(text, "Nope"), unknown("Nope"))
     );
     let text = "{ [ Maybe.1 ] }";
     assert_eq!(
         fault::<Deep>(text),
-        corporate(
-            &[0, 0],
-            at(text, "Maybe.1"),
-            Problem::UnknownVariant("Maybe".to_owned())
-        )
+        corporate(&[0, 0], at(text, "Maybe.1"), unknown("Maybe"))
     );
 }
 
@@ -100,12 +98,12 @@ fn a_variant_body_is_child_one() {
     let text = "Some.x";
     assert_eq!(
         fault::<Option<i64>>(text),
-        corporate(&[1], at(text, "x"), Problem::Value("x".to_owned()))
+        corporate(&[1], at(text, "x"), value("x"))
     );
     let text = "Some.Some.x";
     assert_eq!(
         fault::<Option<Option<i64>>>(text),
-        corporate(&[1, 1], at(text, "x"), Problem::Value("x".to_owned()))
+        corporate(&[1, 1], at(text, "x"), value("x"))
     );
     let text = "Ok.{ 1 }";
     assert_eq!(
@@ -209,7 +207,7 @@ fn arity_and_shape() {
     let text = "Maybe";
     assert_eq!(
         fault::<bool>(text),
-        corporate(&[], Extent(0, 5), Problem::Value("Maybe".to_owned()))
+        corporate(&[], Extent(0, 5), value("Maybe"))
     );
 }
 
@@ -283,16 +281,36 @@ fn structural_faults_pass_through() {
 }
 
 #[test]
+fn corporate_descent_spends_the_caller_budget_before_each_reader() {
+    let text = "[ 1 2 ]";
+    let exhausted = Potential::<Vec<i64>>::from(text)
+        .actualize(incorporation_budget(2))
+        .unwrap_err();
+    assert_eq!(
+        exhausted,
+        corporate(&[1], at(text, "2"), Problem::BudgetExhausted)
+    );
+    assert_eq!(
+        Potential::<Vec<i64>>::from(text)
+            .actualize(incorporation_budget(3))
+            .unwrap(),
+        vec![1, 2]
+    );
+}
+
+#[test]
 fn faults_are_themselves_datomic() {
     let f = fault::<Vec<i64>>("[ 1 x ]");
     let text = f.textualize();
-    assert_eq!(text, "Corporate.{ { [ 1 ] { 4 5 } } Value.“x” }");
-    let back: Fault = Potential::<Fault>::from(text.as_str()).actualize().unwrap();
+    assert_eq!(text, "Corporate.{ { [ 1 ] { 4 5 } } Value.(x) }");
+    let back: Fault = Potential::<Fault>::from(text.as_str())
+        .actualize(budget())
+        .unwrap();
     assert_eq!(back, f);
     let s = fault::<Scores>("{ Ada [ 1 }");
     assert_eq!(s.textualize(), "Structural.{ { 10 11 } Unopened.Braced }");
     let back: Fault = Potential::<Fault>::from(s.textualize().as_str())
-        .actualize()
+        .actualize(budget())
         .unwrap();
     assert_eq!(back, s);
     let c = fault::<Scores>("{ Ada <a> }");

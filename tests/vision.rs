@@ -7,7 +7,7 @@ use datom_codec::{Actualizable, Datomic, Decimal, Potential};
 
 fn round_trip<T: Datomic + PartialEq + std::fmt::Debug>(text: &str, value: T) {
     let potential = Potential::<T>::from(text);
-    let read: T = potential.actualize().unwrap();
+    let read: T = potential.actualize(budget()).unwrap();
     assert_eq!(read, value);
     assert_eq!(value.textualize(), text);
 }
