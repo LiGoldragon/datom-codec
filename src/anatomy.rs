@@ -17,22 +17,30 @@ pub enum WordRefusal {
     Bare(BareRefusal),
     /// Its root delineation is a period-headed variant.
     Period(Word),
+    /// Its separator run cannot remain a word below a variant head.
+    Unstable(Word),
 }
 
 /// The named behavior that examines a word's root structural separator.
 trait Rooting {
-    fn root_period(&self) -> bool;
+    fn word_shape(&self) -> WordShape;
+}
+
+enum WordShape {
+    Plain,
+    Chain(protos::Separator),
+    Malformed,
 }
 
 impl Rooting for str {
-    fn root_period(&self) -> bool {
+    fn word_shape(&self) -> WordShape {
         let mut first = None;
         let mut separated = false;
         let mut before = false;
         for glyph in self.chars() {
             if let Glyph::Separate(separator) = glyph.classify() {
                 if !before || separated {
-                    return false;
+                    return WordShape::Malformed;
                 }
                 first.get_or_insert(separator);
                 separated = true;
@@ -41,7 +49,14 @@ impl Rooting for str {
                 separated = false;
             }
         }
-        !separated && matches!(first, Some(protos::Separator::Period))
+        if separated {
+            WordShape::Malformed
+        } else {
+            match first {
+                Some(separator) => WordShape::Chain(separator),
+                None => WordShape::Plain,
+            }
+        }
     }
 }
 
@@ -49,10 +64,10 @@ impl TryFrom<Word> for DatomWord {
     type Error = WordRefusal;
 
     fn try_from(word: Word) -> Result<Self, Self::Error> {
-        if word.as_ref().root_period() {
-            Err(WordRefusal::Period(word))
-        } else {
-            Ok(Self(word))
+        match word.as_ref().word_shape() {
+            WordShape::Chain(protos::Separator::Period) => Err(WordRefusal::Period(word)),
+            WordShape::Malformed => Err(WordRefusal::Unstable(word)),
+            WordShape::Plain | WordShape::Chain(_) => Ok(Self(word)),
         }
     }
 }
@@ -96,6 +111,9 @@ impl WordProjecting for Word {
                     .expect("a period-root word has a word body");
                 Datom::Variant(head, Box::new(tail.project_word()))
             }
+            Err(WordRefusal::Unstable(word)) => Datom::Text(
+                Text::try_from(word.as_ref()).expect("a Protos word remains text"),
+            ),
             Err(WordRefusal::Bare(_)) => unreachable!("a Word was already validated"),
         }
     }

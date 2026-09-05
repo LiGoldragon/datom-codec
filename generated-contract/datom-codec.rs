@@ -85,6 +85,7 @@ impl datom_codec::Datomic for Datom {
 pub enum WordRefusal {
     Bare(protos::BareRefusal),
     Period(protos::Word),
+    Unstable(protos::Word),
 }
 impl datom_codec::Datomic for WordRefusal {
     fn incorporate(site: datom_codec::Site<'_>) -> Result<Self, datom_codec::Fault> {
@@ -92,6 +93,7 @@ impl datom_codec::Datomic for WordRefusal {
         match v.name {
             "Bare" => Ok(Self::Bare(datom_codec::Carrying::body(v)?)),
             "Period" => Ok(Self::Period(datom_codec::Carrying::body(v)?)),
+            "Unstable" => Ok(Self::Unstable(datom_codec::Carrying::body(v)?)),
             _ => {
                 Err(
                     datom_codec::Sited::refuse(
@@ -113,6 +115,12 @@ impl datom_codec::Datomic for WordRefusal {
             Self::Period(p0) => {
                 datom_codec::Datom::Variant(
                     "Period".to_owned(),
+                    Box::new(datom_codec::Datomic::conceive(p0)),
+                )
+            }
+            Self::Unstable(p0) => {
+                datom_codec::Datom::Variant(
+                    "Unstable".to_owned(),
                     Box::new(datom_codec::Datomic::conceive(p0)),
                 )
             }

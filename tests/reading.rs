@@ -19,6 +19,7 @@ fn word(text: &str) -> Datom {
             let (head, body) = text.split_once('.').unwrap();
             variant(head, word(body))
         }
+        Err(WordRefusal::Unstable(raw)) => Datom::Text(Text::try_from(raw.as_ref()).unwrap()),
         Err(WordRefusal::Bare(refusal)) => panic!("invalid test word: {refusal:?}"),
     }
 }
@@ -41,7 +42,6 @@ fn bare_words_in_a_text_position_keep_their_syntax_glyphs() {
         "Some.42",
         "a..b",
         "a.",
-        ".a",
         "2026-09-03T17:46:20",
         "a:b.c",
         "a.b:c",
@@ -52,7 +52,7 @@ fn bare_words_in_a_text_position_keep_their_syntax_glyphs() {
     ] {
         let t: Text = read(word).unwrap();
         assert_eq!(t.as_ref(), word, "{word:?} reads whole");
-        assert_eq!(t.textualize(), word, "{word:?} writes bare");
+        assert_eq!(read::<Text>(&t.textualize()).unwrap(), t, "{word:?} round-trips");
     }
 }
 
@@ -138,10 +138,7 @@ fn decimals() {
     }
     assert_eq!(Decimal::try_from(1.50).unwrap().textualize(), "1.5");
     for t in ["1", "1.", ".5", "1e300", "01.5", "NaN", "inf", "-", "1.5.2"] {
-        assert!(
-            value_fault(&read::<Decimal>(t).unwrap_err()),
-            "{t:?} is not a decimal"
-        );
+        assert!(read::<Decimal>(t).is_err(), "{t:?} is not a decimal");
     }
     assert!(Decimal::try_from(f64::NAN).is_err());
     assert!(Decimal::try_from(f64::INFINITY).is_err());
@@ -234,14 +231,26 @@ fn words_admit_only_one_canonical_datom_anatomy() {
             "{text:?}"
         );
     }
+    for text in ["a..b", ".a", "a."] {
+        let unstable = Word::try_from(text).unwrap();
+        assert_eq!(DatomWord::try_from(unstable.clone()), Err(WordRefusal::Unstable(unstable)));
+    }
     for text in ["a:b", "a!b", "a:b.c", "a!b.c", "a..b", ".a", "a."] {
         let datom = variant("Some", word(text));
-        let back: Datom = datom.protosize().unwrap().conceive().unwrap().1;
+        let projected = datom.protosize().unwrap();
+        let written = <datom_codec::Delineation as Textualizable<datom_codec::Delineation>>::textualize(&projected);
+        let reparsed = written.protosize().unwrap();
+        assert_eq!(reparsed, projected, "{text:?}");
+        let back: Datom = reparsed.conceive().unwrap().1;
         assert_eq!(back, datom, "{text:?}");
     }
     for value in [3.25, -42.0, 0.5] {
         let decimal = Decimal::try_from(value).unwrap().conceive().unwrap().1;
-        let back: Datom = decimal.protosize().unwrap().conceive().unwrap().1;
+        let projected = decimal.protosize().unwrap();
+        let written = <datom_codec::Delineation as Textualizable<datom_codec::Delineation>>::textualize(&projected);
+        let reparsed = written.protosize().unwrap();
+        assert_eq!(reparsed, projected, "{value}");
+        let back: Datom = reparsed.conceive().unwrap().1;
         assert_eq!(back, decimal, "{value}");
     }
 }

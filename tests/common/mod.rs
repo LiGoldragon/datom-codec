@@ -26,6 +26,7 @@ fn word(name: &str) -> Datom {
             let (head, body) = raw.as_ref().split_once('.').unwrap();
             variant(head, word(body))
         }
+        Err(WordRefusal::Unstable(raw)) => Datom::Text(Text::try_from(raw.as_ref()).unwrap()),
         Err(WordRefusal::Bare(refusal)) => panic!("invalid test word: {refusal:?}"),
     }
 }
