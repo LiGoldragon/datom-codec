@@ -1,7 +1,9 @@
 //! The vision's example types, borne Datomic the way generated code bears it.
 #![allow(dead_code)]
 
-use datomic::{Carrying, Datom, Datomic, Fault, Meaning, Positional, Problem, Site, Sited, Text};
+use datomic::{
+    Carrying, Datom, Datomic, Fault, Headed, Meaning, Positional, Problem, Site, Sited, Text,
+};
 
 pub fn text(s: &str) -> Text {
     Text::try_from(s).unwrap()

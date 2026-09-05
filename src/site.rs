@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use protos::{Glyphing, Incorporable, Integer, Locating, Pathed, Separator, Situation, Text};
 
 use crate::anatomy::{Datom, Expected, Fault, Found, Locus, Problem};
-use crate::kinds::{Carrying, Datomic, Positional, Sited};
+use crate::kinds::{Carrying, Counted, Datomic, Headed, Positional, Sited};
 
 /// A datom at its situation: what a corporate reader is handed.
 #[derive(Clone, Copy, Debug)]
@@ -154,8 +154,8 @@ impl<'a> Sited<'a> for Site<'a> {
     }
 }
 
-impl Positional for Positions<'_> {
-    fn position<T: Datomic>(&mut self) -> Result<T, Fault> {
+impl<T: Datomic> Positional<T> for Positions<'_> {
+    fn position(&mut self) -> Result<T, Fault> {
         let index = self.index;
         self.index += 1;
         let site = Site {
@@ -170,14 +170,16 @@ impl Positional for Positions<'_> {
             }
         }
     }
+}
 
+impl Counted for Positions<'_> {
     fn remaining(&self) -> Integer {
         (self.datoms.len() - self.index) as Integer
     }
 }
 
-impl<'a> Carrying<'a> for Variant<'a> {
-    fn body<T: Datomic>(self) -> Result<T, Fault> {
+impl<T: Datomic> Carrying<T> for Variant<'_> {
+    fn body(self) -> Result<T, Fault> {
         match self.body {
             Some(body) => match T::incorporate(body) {
                 Ok(value) => Ok(value),
@@ -188,7 +190,9 @@ impl<'a> Carrying<'a> for Variant<'a> {
                 .refuse(Problem::Shape(Expected::Variant, Found::Word))),
         }
     }
+}
 
+impl<'a> Headed<'a> for Variant<'a> {
     fn positions(self, arity: Integer) -> Result<Positions<'a>, Fault> {
         let body = match self.body {
             Some(body) => body,
@@ -207,9 +211,9 @@ impl<'a> Carrying<'a> for Variant<'a> {
         }
     }
 
-    fn nothing(self) -> Result<(), Fault> {
+    fn nothing(self) -> Result<Self, Fault> {
         match self.body {
-            None => Ok(()),
+            None => Ok(self),
             Some(_) => Err(self
                 .site
                 .refuse(Problem::Shape(Expected::Word, Found::Variant))),

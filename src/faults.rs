@@ -1,9 +1,9 @@
 //! The faults: pathed, converted from protos's, and themselves datomic.
 
-use protos::{Extent, Integer, Path, Pathed};
+use protos::{Extent, Integer, Path, Pathed, Text};
 
 use crate::anatomy::{Datom, Fault, Locus, Problem};
-use crate::kinds::{Carrying, Datomic, Positional, Sited};
+use crate::kinds::{Carrying, Datomic, Headed, Positional, Sited};
 use crate::site::Site;
 
 impl From<protos::Fault> for Fault {
@@ -61,7 +61,7 @@ impl Datomic for Locus {
     fn incorporate(site: Site<'_>) -> Result<Self, Fault> {
         let mut p = site.positions(2)?;
         Ok(Locus {
-            path: p.position::<Path>()?,
+            path: Positional::<Path>::position(&mut p)?,
             extent: p.position()?,
         })
     }
@@ -119,8 +119,10 @@ impl Datomic for Problem {
                 let mut p = v.positions(2)?;
                 Ok(Self::Arity(p.position()?, p.position()?))
             }
-            "UnknownVariant" => Ok(Self::UnknownVariant(v.body::<protos::Text>()?.into())),
-            "Value" => Ok(Self::Value(v.body::<protos::Text>()?.into())),
+            "UnknownVariant" => Ok(Self::UnknownVariant(String::from(Carrying::<Text>::body(
+                v,
+            )?))),
+            "Value" => Ok(Self::Value(String::from(Carrying::<Text>::body(v)?))),
             "Formless" => Ok(Self::Formless(v.body()?)),
             "OneValue" => Ok(Self::OneValue(v.body()?)),
             other => Err(site.refuse(Problem::UnknownVariant(other.to_owned()))),

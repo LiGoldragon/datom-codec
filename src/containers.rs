@@ -3,7 +3,7 @@
 use protos::{Classifying, Glyph, Text};
 
 use crate::anatomy::{Datom, Expected, Fault, Meaning, Problem};
-use crate::kinds::{Carrying, Datomic, Positional, Sited};
+use crate::kinds::{Carrying, Counted, Datomic, Headed, Positional, Sited};
 use crate::site::Site;
 
 /// The kind whose capability says whether text writes bare: a non-empty run of plain and separator glyphs.

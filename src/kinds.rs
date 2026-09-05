@@ -64,20 +64,28 @@ pub trait Sited<'a> {
     fn refuse(self, problem: Problem) -> Fault;
 }
 
-/// The kind positions bear: each read in turn as the type its position declares.
-pub trait Positional {
+/// The kind positions bear: each read in turn as the type `T` its position declares.
+pub trait Positional<T: Datomic> {
     /// The next position, as its type.
-    fn position<T: Datomic>(&mut self) -> Result<T, Fault>;
+    fn position(&mut self) -> Result<T, Fault>;
+}
+
+/// The kind positions bear: how many remain.
+pub trait Counted {
     /// How many positions remain.
     fn remaining(&self) -> Integer;
 }
 
-/// The kind a variant bears: what it carries, read as the type the variant declares.
-pub trait Carrying<'a> {
+/// The kind a variant bears: its body, read as the type `T` the variant declares.
+pub trait Carrying<T: Datomic> {
     /// The body, as its type.
-    fn body<T: Datomic>(self) -> Result<T, Fault>;
+    fn body(self) -> Result<T, Fault>;
+}
+
+/// The kind a variant bears: what its head announces about its body.
+pub trait Headed<'a>: Sized {
     /// The body's positions, as an inline struct of this arity.
     fn positions(self, arity: Integer) -> Result<Positions<'a>, Fault>;
-    /// Nothing: the variant must be bare.
-    fn nothing(self) -> Result<(), Fault>;
+    /// Nothing: the variant itself, which must be bare.
+    fn nothing(self) -> Result<Self, Fault>;
 }
