@@ -286,7 +286,7 @@ fn structural_faults_pass_through() {
 fn faults_are_themselves_datomic() {
     let f = fault::<Vec<i64>>("[ 1 x ]");
     let text = f.textualize();
-    assert_eq!(text, "Corporate.{ { [ 1 ] { 4 5 } } Value.x }");
+    assert_eq!(text, "Corporate.{ { [ 1 ] { 4 5 } } Value.“x” }");
     let back: Fault = Potential::<Fault>::from(text.as_str()).actualize().unwrap();
     assert_eq!(back, f);
     let s = fault::<Scores>("{ Ada [ 1 }");

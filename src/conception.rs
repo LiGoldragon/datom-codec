@@ -3,7 +3,7 @@
 
 use protos::{
     Boundary, Conceivable, Delineation, Enclosure, Extent, Head, Integer, Locating, Path,
-    Protoform, Separator, Situated, Situation, Textualizable,
+    Protoform, Separator, Situated, Situation, Text, Textualizable,
 };
 
 use crate::anatomy::{Datom, Fault, Found, Locus, Problem};
@@ -120,7 +120,9 @@ impl<'a> Walking<'a> for Walk<'a> {
                 }
             }
             Protoform::Opaque(Boundary::CurlyQuotes, text) => {
-                self.leaf(Datom::Text(text.clone()), at)
+                let text = Text::try_from(text.as_ref())
+                    .expect("a curly-quoted payload cannot contain its terminator");
+                self.leaf(Datom::Text(text), at)
             }
             Protoform::Opaque(Boundary::Parentheses, text) => {
                 self.leaf(Datom::Meaning(text.clone()), at)

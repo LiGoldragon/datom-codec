@@ -5,8 +5,8 @@ mod common;
 
 use common::*;
 use datom_codec::{
-    Actualizable, Conceivable, Datom, Datomic, Expected, Found, Meaning, Potential, Problem,
-    Protosizable, Refusal, Situated, Text, Textualizable,
+    Actualizable, Conceivable, Datom, Datomic, Decimal, Expected, Found, Meaning, Opaque,
+    Potential, Problem, Protosizable, Refusal, Situated, Text, Textualizable,
 };
 use proptest::prelude::*;
 
@@ -115,16 +115,19 @@ fn decimals() {
         ("1.5", 1.5),
         ("100.0", 100.0),
     ] {
-        assert_eq!(read::<f64>(t).unwrap(), v);
+        let v = Decimal::try_from(v).unwrap();
+        assert_eq!(read::<Decimal>(t).unwrap(), v);
         assert_eq!(v.textualize(), t);
     }
-    assert_eq!(1.50f64.textualize(), "1.5");
+    assert_eq!(Decimal::try_from(1.50).unwrap().textualize(), "1.5");
     for t in ["1", "1.", ".5", "1e300", "01.5", "NaN", "inf", "-", "1.5.2"] {
         assert!(
-            value_fault(&read::<f64>(t).unwrap_err()),
+            value_fault(&read::<Decimal>(t).unwrap_err()),
             "{t:?} is not a decimal"
         );
     }
+    assert!(Decimal::try_from(f64::NAN).is_err());
+    assert!(Decimal::try_from(f64::INFINITY).is_err());
 }
 
 #[test]
@@ -176,6 +179,14 @@ fn meaning_escapes() {
 }
 
 #[test]
+fn meaning_keeps_a_curly_quote_closer_as_its_own_content() {
+    let value = read::<Meaning>("(a ” b)").unwrap();
+    let Meaning::Plain(content) = &value;
+    assert_eq!(content.as_ref(), "a ” b");
+    assert_eq!(value.textualize(), "(a ” b)");
+}
+
+#[test]
 fn the_concept_is_situated_by_the_reader_and_by_the_writer() {
     use datom_codec::Locating;
     let text = "{ Ada [ 12 7 -3 ] }";
@@ -201,6 +212,14 @@ fn the_concept_is_situated_by_the_reader_and_by_the_writer() {
 }
 
 #[test]
+fn a_decimal_projection_has_the_anatomy_of_its_written_text() {
+    let value = Decimal::try_from(3.25).unwrap();
+    let projected = value.conceive().protosize().unwrap();
+    let read = value.textualize().protosize().unwrap();
+    assert_eq!(projected, read);
+}
+
+#[test]
 fn non_period_chains_are_words_and_period_chains_are_variants() {
     let text = "{ a:b Some.42 }";
     let Situated(_, datom) = text.protosize().unwrap().conceive().unwrap();
@@ -221,6 +240,40 @@ fn vectors_of_text_take_bare_and_quoted_alike() {
     assert_eq!(Vec::<i64>::new().textualize(), "[]");
 }
 
+#[test]
+fn text_payloads_preserve_the_variant_boundary() {
+    let value = Some(text("."));
+    let written = value.textualize();
+    assert_eq!(written, "Some.“.”");
+    assert_eq!(read::<Option<Text>>(&written).unwrap(), value);
+}
+
+#[test]
+fn fault_text_payloads_remain_data() {
+    let value = datom_codec::Problem::Value("a;b".to_owned());
+    let written = value.textualize();
+    assert_eq!(read::<datom_codec::Problem>(&written).unwrap(), value);
+}
+
+#[test]
+fn exhausted_positions_refuse_without_moving_the_cursor() {
+    use datom_codec::{Counted, Positional, Sited};
+
+    let datom = Datom::Vector(vec![]);
+    let at = protos::Situation {
+        extent: protos::Extent(0, 2),
+        children: vec![],
+    };
+    let site = datom_codec::Site {
+        datom: &datom,
+        at: &at,
+    };
+    let mut positions = site.elements().unwrap();
+    let exhausted: Result<i64, _> = positions.position();
+    assert!(exhausted.is_err());
+    assert_eq!(positions.remaining(), 0);
+}
+
 proptest! {
     #[test]
     fn any_text_round_trips(content in "[^”]*") {
@@ -229,8 +282,8 @@ proptest! {
     }
 
     #[test]
-    fn any_meaning_round_trips(content in "[^”]*") {
-        let m = Meaning::Plain(Text::try_from(content.as_str()).unwrap());
+    fn any_meaning_round_trips(content in ".*") {
+        let m = Meaning::Plain(Opaque::from(content));
         prop_assert_eq!(read::<Meaning>(&m.textualize()).unwrap(), m);
     }
 
@@ -241,6 +294,7 @@ proptest! {
 
     #[test]
     fn any_finite_decimal_round_trips(v in any::<f64>().prop_filter("finite", |v| v.is_finite())) {
-        prop_assert_eq!(read::<f64>(&v.textualize()).unwrap(), v);
+        let v = Decimal::try_from(v).unwrap();
+        prop_assert_eq!(read::<Decimal>(&v.textualize()).unwrap(), v);
     }
 }

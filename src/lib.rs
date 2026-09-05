@@ -23,6 +23,6 @@ pub use site::{Positions, Site, Variant};
 
 pub use protos::{
     Actualizable, Boolean, Boundary, Conceivable, Decimal, Delineation, Enclosure, Extent,
-    Incorporable, Integer, Locating, Path, Pathed, Protoform, Protosizable, Refusal, Separator,
-    Situated, Situating, Situation, Symbol, Text, Texted, Textualizable,
+    Incorporable, Integer, Locating, Opaque, Path, Pathed, Protoform, Protosizable, Refusal,
+    Separator, Situated, Situating, Situation, Symbol, Text, Texted, Textualizable,
 };

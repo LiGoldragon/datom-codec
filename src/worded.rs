@@ -53,12 +53,12 @@ impl Worded for Decimal {
         if !whole.is_canonical_digits() || !fraction.is_digits() {
             return None;
         }
-        let value: Decimal = word.parse().ok()?;
-        value.is_finite().then_some(value)
+        let value: f64 = word.parse().ok()?;
+        Decimal::try_from(value).ok()
     }
 
     fn to_word(&self) -> String {
-        let written = format!("{self}");
+        let written = format!("{}", f64::from(*self));
         match written.split_once('.') {
             Some((whole, fraction)) => {
                 let fraction = fraction.trim_end_matches('0');

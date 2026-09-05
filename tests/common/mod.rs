@@ -2,14 +2,15 @@
 #![allow(dead_code)]
 
 use datom_codec::{
-    Carrying, Datom, Datomic, Fault, Headed, Meaning, Positional, Problem, Site, Sited, Text,
+    Carrying, Datom, Datomic, Fault, Headed, Meaning, Opaque, Positional, Problem, Site, Sited,
+    Text,
 };
 
 pub fn text(s: &str) -> Text {
     Text::try_from(s).unwrap()
 }
 pub fn meaning(s: &str) -> Meaning {
-    Meaning::Plain(text(s))
+    Meaning::Plain(Opaque::from(s))
 }
 fn variant(name: &str, body: Datom) -> Datom {
     Datom::Variant(name.to_owned(), Box::new(body))

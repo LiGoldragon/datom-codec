@@ -53,13 +53,23 @@ impl<'a> Building<'a> for Build<'a> {
                 self.steps.push(Step::Finish(Node::Vector, elements.len()));
                 self.steps.extend(elements.iter().rev().map(Step::Visit));
             }
-            Datom::Text(text) => self
-                .forms
-                .push(Protoform::Opaque(Boundary::CurlyQuotes, text.clone())),
+            Datom::Text(text) => self.forms.push(Protoform::Opaque(
+                Boundary::CurlyQuotes,
+                String::from(text.clone()).into(),
+            )),
             Datom::Meaning(text) => self
                 .forms
                 .push(Protoform::Opaque(Boundary::Parentheses, text.clone())),
-            Datom::Word(word) => self.forms.push(Protoform::Bare(Head::Symbol(word.clone()))),
+            Datom::Word(word) => {
+                let mut forms = word
+                    .protosize()
+                    .expect("a datom word must have structural form")
+                    .0;
+                let form = forms
+                    .pop()
+                    .expect("a datom word must produce one structural form");
+                self.forms.push(form.1);
+            }
         }
     }
 

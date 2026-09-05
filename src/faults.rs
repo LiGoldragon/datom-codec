@@ -125,6 +125,10 @@ impl Datomic for Problem {
             "Value" => Ok(Self::Value(String::from(Carrying::<Text>::body(v)?))),
             "Formless" => Ok(Self::Formless(v.body()?)),
             "OneValue" => Ok(Self::OneValue(v.body()?)),
+            "Exhausted" => {
+                v.nothing()?;
+                Ok(Self::Exhausted)
+            }
             other => Err(site.refuse(Problem::UnknownVariant(other.to_owned()))),
         }
     }
@@ -138,9 +142,13 @@ impl Datomic for Problem {
                 "Arity".carrying(Datom::Struct(vec![expected.conceive(), found.conceive()]))
             }
             Self::UnknownVariant(name) => "UnknownVariant".carrying(Datom::Word(name.clone())),
-            Self::Value(word) => "Value".carrying(Datom::Word(word.clone())),
+            Self::Value(word) => "Value".carrying(Datom::Text(
+                Text::try_from(word.as_str())
+                    .expect("a datom problem value must be representable text"),
+            )),
             Self::Formless(found) => "Formless".carrying(found.conceive()),
             Self::OneValue(count) => "OneValue".carrying(count.conceive()),
+            Self::Exhausted => Datom::Word("Exhausted".to_owned()),
         }
     }
 }

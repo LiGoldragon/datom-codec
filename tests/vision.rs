@@ -3,7 +3,7 @@
 mod common;
 
 use common::*;
-use datom_codec::{Actualizable, Datomic, Potential};
+use datom_codec::{Actualizable, Datomic, Decimal, Potential};
 
 fn round_trip<T: Datomic + PartialEq + std::fmt::Debug>(text: &str, value: T) {
     let potential = Potential::<T>::from(text);
@@ -122,7 +122,7 @@ fn lock() {
 #[test]
 fn intrinsics_actualize_alone() {
     round_trip("42", 42i64);
-    round_trip("-0.5", -0.5f64);
+    round_trip("-0.5", Decimal::try_from(-0.5).unwrap());
     round_trip("True", true);
     round_trip("Ada", text("Ada"));
     round_trip("“a b”", text("a b"));

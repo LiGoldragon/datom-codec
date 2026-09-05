@@ -11,6 +11,47 @@ trait Bare {
     fn is_bare(&self) -> bool;
 }
 
+/// The kind whose capability makes a bare payload unambiguous after a variant head.
+trait Carryable {
+    fn carried(self) -> Self;
+}
+
+impl Carryable for Datom {
+    fn carried(self) -> Self {
+        if let Self::Word(word) = &self {
+            if word.needs_quotes_as_a_payload() {
+                return Self::Text(
+                    Text::try_from(word.as_str())
+                        .expect("a bare word cannot contain a closing quote"),
+                );
+            }
+        }
+        self
+    }
+}
+
+/// The kind whose capability says whether a bare word would blur a preceding variant boundary.
+trait Payload {
+    fn needs_quotes_as_a_payload(&self) -> bool;
+}
+
+impl Payload for str {
+    fn needs_quotes_as_a_payload(&self) -> bool {
+        let mut previous_separator = false;
+        for glyph in self.chars() {
+            let separator = matches!(glyph.classify(), Glyph::Separate(_));
+            if separator && previous_separator {
+                return true;
+            }
+            previous_separator = separator;
+        }
+        self.chars()
+            .next()
+            .is_some_and(|glyph| matches!(glyph.classify(), Glyph::Separate(_)))
+            || previous_separator
+    }
+}
+
 impl Bare for str {
     fn is_bare(&self) -> bool {
         for glyph in self.chars() {
@@ -81,7 +122,7 @@ impl<T: Datomic> Datomic for Option<T> {
 
     fn conceive(&self) -> Datom {
         match self {
-            Some(value) => Datom::Variant("Some".to_owned(), Box::new(value.conceive())),
+            Some(value) => Datom::Variant("Some".to_owned(), Box::new(value.conceive().carried())),
             None => Datom::Word("None".to_owned()),
         }
     }
@@ -99,8 +140,8 @@ impl<T: Datomic, E: Datomic> Datomic for Result<T, E> {
 
     fn conceive(&self) -> Datom {
         match self {
-            Ok(value) => Datom::Variant("Ok".to_owned(), Box::new(value.conceive())),
-            Err(error) => Datom::Variant("Err".to_owned(), Box::new(error.conceive())),
+            Ok(value) => Datom::Variant("Ok".to_owned(), Box::new(value.conceive().carried())),
+            Err(error) => Datom::Variant("Err".to_owned(), Box::new(error.conceive().carried())),
         }
     }
 }

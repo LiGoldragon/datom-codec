@@ -157,6 +157,15 @@ impl<'a> Sited<'a> for Site<'a> {
 impl<T: Datomic> Positional<T> for Positions<'_> {
     fn position(&mut self) -> Result<T, Fault> {
         let index = self.index;
+        if index == self.datoms.len() {
+            return Err(Fault::Corporate(
+                Locus {
+                    path: vec![],
+                    extent: self.at.extent,
+                },
+                Problem::Exhausted,
+            ));
+        }
         self.index += 1;
         let site = Site {
             datom: &self.datoms[index],
@@ -174,7 +183,7 @@ impl<T: Datomic> Positional<T> for Positions<'_> {
 
 impl Counted for Positions<'_> {
     fn remaining(&self) -> Integer {
-        (self.datoms.len() - self.index) as Integer
+        self.datoms.len().saturating_sub(self.index) as Integer
     }
 }
 

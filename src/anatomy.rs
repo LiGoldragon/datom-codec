@@ -1,6 +1,6 @@
 //! The types of the dialect: the concept, the meaning, and the faults.
 
-use protos::{Extent, Integer, Path, Symbol, Text};
+use protos::{Extent, Integer, Opaque, Path, Symbol, Text};
 
 /// The datom concept: what a protoform means in the dialect, before a type is known.
 #[derive(Debug, PartialEq, Eq)]
@@ -14,7 +14,7 @@ pub enum Datom {
     /// Quoted text.
     Text(Text),
     /// Parenthesized meaning.
-    Meaning(Text),
+    Meaning(Opaque),
     /// A bare word: the position decides what it is.
     Word(String),
 }
@@ -23,7 +23,7 @@ pub enum Datom {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Meaning {
     /// Plain text.
-    Plain(Text),
+    Plain(Opaque),
 }
 
 /// What a position expected.
@@ -87,6 +87,8 @@ pub enum Problem {
     Formless(Found),
     /// The text holds this many top-level structures, not one.
     OneValue(Integer),
+    /// A positional reader was asked for an absent position.
+    Exhausted,
 }
 
 /// Where a fault is: its path from the root datom, and its extent in the text.
