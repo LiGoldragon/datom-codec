@@ -155,7 +155,7 @@ dependencies = [
 [[package]]
 name = "protos"
 version = "0.19.0"
-source = "git+https://github.com/LiGoldragon/protos?rev=48fb287e7047#48fb287e70479eb31bca4d54775bbc9109e6c41a"
+source = "git+https://github.com/LiGoldragon/protos?rev=205408679738#205408679738d92d1182fe7c6f5c0eeb278ce318"
 
 [[package]]
 name = "quick-error"

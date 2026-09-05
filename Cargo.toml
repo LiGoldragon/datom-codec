@@ -9,7 +9,7 @@ description = "Datomic: positional typed data over Protos."
 publish     = false
 
 [dependencies]
-protos = { git = "https://github.com/LiGoldragon/protos", rev = "48fb287e7047" }
+protos = { git = "https://github.com/LiGoldragon/protos", rev = "205408679738" }
 
 [dev-dependencies]
 proptest = "1.6"
