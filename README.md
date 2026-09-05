@@ -1,19 +1,17 @@
-# datomic
+# Datomic
 
-Positional typed data over Protos. The datom dialect: Concept
-layer between Protoform and Corporate.
+Positional typed data over Protos. The datom dialect carries data,
+strictly typed, and its whole work is serialization and deserialization.
+Schema-driven and positional: the reader walks the expected type,
+writing is the exact reverse projection.
 
-## Datom (the concept)
+## Forms
 
-Variant, Struct, Vector, Text, Meaning, Bare. No map: a struct
-when keys are fixed, a vector of structs when they are not.
+Struct (braces), Vector (brackets), Variant (headed with dot),
+Text (curly-quoted or bare), Meaning (parentheses), Bare (bare symbol).
 
-## Datomic (the kind)
+## The Datomic kind
 
-`incorporate` (Datom -> Self, may fault), `conceive` (&self -> Datom,
-cannot fault), `textualize` (&self -> Text, chains through protos).
-Borne by Integer, Decimal, Boolean, Text, Meaning, Vec, Option, Result.
-
-## Ethos declaration
-
-See `datomic.ethos`.
+Every corporate type bears `Datomic`, providing `incorporate_from`
+(concept to corporate) and `textualize` (corporate to text through
+the chain).

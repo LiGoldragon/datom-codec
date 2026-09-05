@@ -1,5 +1,5 @@
 {
-  description = "datomic — positional typed data over Protos Portion";
+  description = "datomic — positional typed data over Protos";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";

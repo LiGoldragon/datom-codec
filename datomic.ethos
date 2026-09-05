@@ -1,21 +1,21 @@
-; datomic.ethos — the pure-data dialect's types
 Types
-[ protos:[ Text Integer Decimal Boolean Symbol Separator Protoform Delineation Path Extent Potential Protosizable Conceivable Incorporable Actualizable Textualizable Situating ] ]
-[ Datom.[ Variant.{ Symbol Separator Option<Datom> }
-          Struct.Vector<Datom>
-          Vector.Vector<Datom>
-          Text.Text
-          Meaning.Text
-          Bare.Symbol ]
+[ protos:[ Text Integer Decimal Boolean Extent Separator Enclosure Boundary Head Protoform Delineation Situated ] ]
+[ Datom.[ Variant.{ Head Box<Datom> } Struct.Vector<Datom> Vector.Vector<Datom> Text.Text Meaning.Text Bare.Text ]
   Meaning.[ Plain.Text ]
-  Fault.[ Structural.protos:Fault Conceptual.{ Path Problem } Corporate.{ Path Problem } ]
-  Problem.[ Shape.{ Expected Datom } Arity.{ Integer Integer } UnknownVariant.Symbol Separator.Separator Value.Text OneValue ]
-  Expected.[ Variant Struct Vector Text Meaning Integer Decimal Boolean Bare ] ]
-[ Datom.[ Protosizable Incorporable<Integer> Incorporable<Boolean> Incorporable<Decimal> Incorporable<Text> Incorporable<Meaning> ]
-  Protoform.[ Conceivable<Datom> ] Delineation.[ Conceivable<Datom> ]
-  Integer.[ Datomic Conceivable<Datom> ] Decimal.[ Datomic Conceivable<Datom> ]
-  Boolean.[ Datomic Conceivable<Datom> ] Text.[ Datomic Conceivable<Datom> ]
-  Meaning.[ Datomic Conceivable<Datom> ]
-  Vector<Datomic>.[ Datomic Conceivable<Datom> ] Option<Datomic>.[ Datomic Conceivable<Datom> ]
-  Result<Datomic Datomic>.[ Datomic Conceivable<Datom> ]
-  Situated<Datomic>.[ Datomic Conceivable<Datom> ] ]
+  Expected.[ Variant Struct Vector Text Meaning Integer Decimal Boolean Bare ]
+  Problem.[ Shape.{ Expected Datom } Arity.{ Integer Integer } UnknownVariant.Text Separator.Separator Value.Text OneValue ]
+  Fault.[ Structural.protos:Fault Conceptual.{ Vector<Integer> Problem } Corporate.{ Vector<Integer> Problem } ] ]
+[ Datom.[ Textualizable Protosizable Datomic ]
+  Integer.[ Datomic ]
+  Boolean.[ Datomic ]
+  Decimal.[ Datomic ]
+  Text.[ Datomic ]
+  Meaning.[ Datomic ]
+  Expected.[ Datomic ]
+  Problem.[ Datomic ]
+  Fault.[ Datomic ]
+  Separator.[ Datomic ]
+  Enclosure.[ Datomic ]
+  Boundary.[ Datomic ]
+  Extent.[ Datomic ]
+  Situated<Datomic>.[ Datomic ] ]
