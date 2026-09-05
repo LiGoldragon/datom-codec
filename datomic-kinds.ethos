@@ -1,0 +1,4 @@
+; datomic-kinds.ethos — the pure-data dialect's kinds
+Kinds
+[ protos:[ Text Conceivable ] ]
+[ Datomic.{ [ Sized Conceivable<Datom> ] [] [] [ textualize.[ Text ] ] } ]

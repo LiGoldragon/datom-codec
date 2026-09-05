@@ -1,4 +1,4 @@
-; datomic.ethos — the pure-data dialect on protos
+; datomic.ethos — the pure-data dialect's types
 Types
 [ protos:[ Text Integer Decimal Boolean Symbol Separator Protoform Delineation Path Extent Potential Protosizable Conceivable Incorporable Actualizable Textualizable Situating ] ]
 [ Datom.[ Variant.{ Symbol Separator Option<Datom> }
@@ -11,7 +11,6 @@ Types
   Fault.[ Structural.protos:Fault Conceptual.{ Path Problem } Corporate.{ Path Problem } ]
   Problem.[ Shape.{ Expected Datom } Arity.{ Integer Integer } UnknownVariant.Symbol Separator.Separator Value.Text OneValue ]
   Expected.[ Variant Struct Vector Text Meaning Integer Decimal Boolean Bare ] ]
-[ Datomic.{ [ Sized Conceivable<Datom> ] [] [] [ textualize.[ Text ] ] } ]
 [ Datom.[ Protosizable Incorporable<Integer> Incorporable<Boolean> Incorporable<Decimal> Incorporable<Text> Incorporable<Meaning> ]
   Protoform.[ Conceivable<Datom> ] Delineation.[ Conceivable<Datom> ]
   Integer.[ Datomic Conceivable<Datom> ] Decimal.[ Datomic Conceivable<Datom> ]
