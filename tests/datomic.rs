@@ -1,10 +1,8 @@
-use std::collections::BTreeMap;
-
 use datomic::{
-    Actualizable, Corporal, Datom, Datomic, Enclosure, Expected, Extent, Fault, Meaning, Printing,
-    Problem, Protoform, Protosizable, Separator, Situated, Textualizable,
+    Actualizable, Datom, Datomic, Enclosure, Expected, Extent, Fault, Head, Incorporable, Meaning,
+    Problem, Protoform, Separator, Situated,
 };
-use protos::{Conceptual, Potential, Structural};
+use protos::{Conceivable, Potential, Protosizable, Textualizable};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -59,7 +57,6 @@ fn decimal_round_trips() {
 
 #[test]
 fn decimal_edge_values() {
-    // Table of edge values with round-trip verification
     for (input, expected) in [
         ("0.0", 0.0_f64),
         ("1.5", 1.5),
@@ -111,14 +108,6 @@ fn vector_of_integers() {
 }
 
 #[test]
-fn map_of_string_to_integer() {
-    let source = "\u{00AB} alpha 1 beta 2 \u{00BB}";
-    let map: BTreeMap<String, i64> = actualize(source).unwrap();
-    assert_eq!(map.len(), 2);
-    assert_eq!(map["alpha"], 1);
-}
-
-#[test]
 fn option_round_trips() {
     round_trip::<Option<i64>>("Some.42", Some(42));
     round_trip::<Option<i64>>("None", None);
@@ -137,13 +126,14 @@ fn result_round_trips() {
 #[derive(Debug, PartialEq, Clone)]
 struct Address(String, String, String);
 
-impl Corporal<Datom> for Address {
+impl Incorporable<Datom> for Address {
     type Fault = Fault;
+
     fn incorporate(datom: Datom) -> Result<Self, Fault> {
         match datom {
             Datom::Struct(fields) => {
                 if fields.len() != 3 {
-                    return Err(Fault::Corporal(
+                    return Err(Fault::Corporate(
                         vec![],
                         Problem::Arity(3, fields.len() as i64),
                     ));
@@ -155,19 +145,20 @@ impl Corporal<Datom> for Address {
                     String::incorporate(it.next().unwrap())?,
                 ))
             }
-            _ => Err(Fault::Corporal(
+            _ => Err(Fault::Corporate(
                 vec![],
                 Problem::Shape(Expected::Struct, datom),
             )),
         }
     }
 }
+
 impl Datomic for Address {
-    fn datomize(&self) -> Datom {
+    fn conceive(&self) -> Datom {
         Datom::Struct(vec![
-            self.0.datomize(),
-            self.1.datomize(),
-            self.2.datomize(),
+            self.0.conceive(),
+            self.1.conceive(),
+            self.2.conceive(),
         ])
     }
 }
@@ -178,14 +169,15 @@ enum Role {
     Reviewer(i64, i64),
 }
 
-impl Corporal<Datom> for Role {
+impl Incorporable<Datom> for Role {
     type Fault = Fault;
+
     fn incorporate(datom: Datom) -> Result<Self, Fault> {
         match &datom {
             Datom::Bare(s) if s == "Author" => Ok(Role::Author),
             Datom::Variant(head, sep, body) => {
                 if *sep != Separator::Period {
-                    return Err(Fault::Corporal(vec![], Problem::Separator(*sep)));
+                    return Err(Fault::Corporate(vec![], Problem::Separator(*sep)));
                 }
                 match head.as_str() {
                     "Reviewer" => match body {
@@ -194,37 +186,38 @@ impl Corporal<Datom> for Role {
                                 i64::incorporate(fields[0].clone())?,
                                 i64::incorporate(fields[1].clone())?,
                             )),
-                            _ => Err(Fault::Corporal(
+                            _ => Err(Fault::Corporate(
                                 vec![],
                                 Problem::Shape(Expected::Struct, *b.clone()),
                             )),
                         },
-                        None => Err(Fault::Corporal(
+                        None => Err(Fault::Corporate(
                             vec![],
                             Problem::Shape(Expected::Struct, datom),
                         )),
                     },
-                    _ => Err(Fault::Corporal(
+                    _ => Err(Fault::Corporate(
                         vec![],
                         Problem::UnknownVariant(head.clone()),
                     )),
                 }
             }
-            _ => Err(Fault::Corporal(
+            _ => Err(Fault::Corporate(
                 vec![],
                 Problem::Shape(Expected::Variant, datom),
             )),
         }
     }
 }
+
 impl Datomic for Role {
-    fn datomize(&self) -> Datom {
+    fn conceive(&self) -> Datom {
         match self {
             Role::Author => Datom::Bare("Author".to_owned()),
             Role::Reviewer(y, c) => Datom::Variant(
                 "Reviewer".to_owned(),
                 Separator::Period,
-                Some(Box::new(Datom::Struct(vec![y.datomize(), c.datomize()]))),
+                Some(Box::new(Datom::Struct(vec![y.conceive(), c.conceive()]))),
             ),
         }
     }
@@ -233,13 +226,14 @@ impl Datomic for Role {
 #[derive(Debug, PartialEq, Clone)]
 struct Person(String, i64, Address, Vec<Role>);
 
-impl Corporal<Datom> for Person {
+impl Incorporable<Datom> for Person {
     type Fault = Fault;
+
     fn incorporate(datom: Datom) -> Result<Self, Fault> {
         match datom {
             Datom::Struct(fields) => {
                 if fields.len() != 4 {
-                    return Err(Fault::Corporal(
+                    return Err(Fault::Corporate(
                         vec![],
                         Problem::Arity(4, fields.len() as i64),
                     ));
@@ -252,20 +246,21 @@ impl Corporal<Datom> for Person {
                     Vec::<Role>::incorporate(it.next().unwrap())?,
                 ))
             }
-            _ => Err(Fault::Corporal(
+            _ => Err(Fault::Corporate(
                 vec![],
                 Problem::Shape(Expected::Struct, datom),
             )),
         }
     }
 }
+
 impl Datomic for Person {
-    fn datomize(&self) -> Datom {
+    fn conceive(&self) -> Datom {
         Datom::Struct(vec![
-            self.0.datomize(),
-            self.1.datomize(),
-            self.2.datomize(),
-            self.3.datomize(),
+            self.0.conceive(),
+            self.1.conceive(),
+            self.2.conceive(),
+            self.3.conceive(),
         ])
     }
 }
@@ -277,14 +272,15 @@ enum Reply {
     Pending,
 }
 
-impl Corporal<Datom> for Reply {
+impl Incorporable<Datom> for Reply {
     type Fault = Fault;
+
     fn incorporate(datom: Datom) -> Result<Self, Fault> {
         match &datom {
             Datom::Bare(s) if s == "Pending" => Ok(Reply::Pending),
             Datom::Variant(head, sep, body) => {
                 if *sep != Separator::Period {
-                    return Err(Fault::Corporal(vec![], Problem::Separator(*sep)));
+                    return Err(Fault::Corporate(vec![], Problem::Separator(*sep)));
                 }
                 match (head.as_str(), body) {
                     ("Accepted", Some(b)) => match b.as_ref() {
@@ -292,7 +288,7 @@ impl Corporal<Datom> for Reply {
                             i64::incorporate(fields[0].clone())?,
                             String::incorporate(fields[1].clone())?,
                         )),
-                        _ => Err(Fault::Corporal(
+                        _ => Err(Fault::Corporate(
                             vec![],
                             Problem::Shape(Expected::Struct, *b.clone()),
                         )),
@@ -302,38 +298,39 @@ impl Corporal<Datom> for Reply {
                             String::incorporate(fields[0].clone())?,
                             i64::incorporate(fields[1].clone())?,
                         )),
-                        _ => Err(Fault::Corporal(
+                        _ => Err(Fault::Corporate(
                             vec![],
                             Problem::Shape(Expected::Struct, *b.clone()),
                         )),
                     },
-                    _ => Err(Fault::Corporal(
+                    _ => Err(Fault::Corporate(
                         vec![],
                         Problem::UnknownVariant(head.clone()),
                     )),
                 }
             }
-            _ => Err(Fault::Corporal(
+            _ => Err(Fault::Corporate(
                 vec![],
                 Problem::Shape(Expected::Variant, datom),
             )),
         }
     }
 }
+
 impl Datomic for Reply {
-    fn datomize(&self) -> Datom {
+    fn conceive(&self) -> Datom {
         match self {
             Reply::Accepted(id, at) => Datom::Variant(
                 "Accepted".to_owned(),
                 Separator::Period,
-                Some(Box::new(Datom::Struct(vec![id.datomize(), at.datomize()]))),
+                Some(Box::new(Datom::Struct(vec![id.conceive(), at.conceive()]))),
             ),
             Reply::Refused(reason, code) => Datom::Variant(
                 "Refused".to_owned(),
                 Separator::Period,
                 Some(Box::new(Datom::Struct(vec![
-                    reason.datomize(),
-                    code.datomize(),
+                    reason.conceive(),
+                    code.conceive(),
                 ]))),
             ),
             Reply::Pending => Datom::Bare("Pending".to_owned()),
@@ -341,17 +338,18 @@ impl Datomic for Reply {
     }
 }
 
-// Lock family
 #[derive(Debug, PartialEq, Clone)]
 #[allow(dead_code)]
 struct Lock(i64, String, String, Vec<String>, String);
-impl Corporal<Datom> for Lock {
+
+impl Incorporable<Datom> for Lock {
     type Fault = Fault;
+
     fn incorporate(datom: Datom) -> Result<Self, Fault> {
         match datom {
             Datom::Struct(fields) => {
                 if fields.len() != 5 {
-                    return Err(Fault::Corporal(
+                    return Err(Fault::Corporate(
                         vec![],
                         Problem::Arity(5, fields.len() as i64),
                     ));
@@ -365,22 +363,131 @@ impl Corporal<Datom> for Lock {
                     String::incorporate(it.next().unwrap())?,
                 ))
             }
-            _ => Err(Fault::Corporal(
+            _ => Err(Fault::Corporate(
                 vec![],
                 Problem::Shape(Expected::Struct, datom),
             )),
         }
     }
 }
+
 impl Datomic for Lock {
-    fn datomize(&self) -> Datom {
+    fn conceive(&self) -> Datom {
         Datom::Struct(vec![
-            self.0.datomize(),
-            self.1.datomize(),
-            self.2.datomize(),
-            self.3.datomize(),
-            self.4.datomize(),
+            self.0.conceive(),
+            self.1.conceive(),
+            self.2.conceive(),
+            self.3.conceive(),
+            self.4.conceive(),
         ])
+    }
+}
+
+// Note: struct of author Text, body Meaning
+#[derive(Debug, PartialEq, Clone)]
+struct Note(String, Meaning);
+
+impl Incorporable<Datom> for Note {
+    type Fault = Fault;
+
+    fn incorporate(datom: Datom) -> Result<Self, Fault> {
+        match datom {
+            Datom::Struct(fields) => {
+                if fields.len() != 2 {
+                    return Err(Fault::Corporate(
+                        vec![],
+                        Problem::Arity(2, fields.len() as i64),
+                    ));
+                }
+                let mut it = fields.into_iter();
+                Ok(Note(
+                    String::incorporate(it.next().unwrap())?,
+                    Meaning::incorporate(it.next().unwrap())?,
+                ))
+            }
+            _ => Err(Fault::Corporate(
+                vec![],
+                Problem::Shape(Expected::Struct, datom),
+            )),
+        }
+    }
+}
+
+impl Datomic for Note {
+    fn conceive(&self) -> Datom {
+        Datom::Struct(vec![self.0.conceive(), self.1.conceive()])
+    }
+}
+
+// Remark: struct of author Text, body Text
+#[derive(Debug, PartialEq, Clone)]
+struct Remark(String, String);
+
+impl Incorporable<Datom> for Remark {
+    type Fault = Fault;
+
+    fn incorporate(datom: Datom) -> Result<Self, Fault> {
+        match datom {
+            Datom::Struct(fields) => {
+                if fields.len() != 2 {
+                    return Err(Fault::Corporate(
+                        vec![],
+                        Problem::Arity(2, fields.len() as i64),
+                    ));
+                }
+                let mut it = fields.into_iter();
+                Ok(Remark(
+                    String::incorporate(it.next().unwrap())?,
+                    String::incorporate(it.next().unwrap())?,
+                ))
+            }
+            _ => Err(Fault::Corporate(
+                vec![],
+                Problem::Shape(Expected::Struct, datom),
+            )),
+        }
+    }
+}
+
+impl Datomic for Remark {
+    fn conceive(&self) -> Datom {
+        Datom::Struct(vec![self.0.conceive(), self.1.conceive()])
+    }
+}
+
+// Standup: struct of team Text, items Vector<Meaning>
+#[derive(Debug, PartialEq, Clone)]
+struct Standup(String, Vec<Meaning>);
+
+impl Incorporable<Datom> for Standup {
+    type Fault = Fault;
+
+    fn incorporate(datom: Datom) -> Result<Self, Fault> {
+        match datom {
+            Datom::Struct(fields) => {
+                if fields.len() != 2 {
+                    return Err(Fault::Corporate(
+                        vec![],
+                        Problem::Arity(2, fields.len() as i64),
+                    ));
+                }
+                let mut it = fields.into_iter();
+                Ok(Standup(
+                    String::incorporate(it.next().unwrap())?,
+                    Vec::<Meaning>::incorporate(it.next().unwrap())?,
+                ))
+            }
+            _ => Err(Fault::Corporate(
+                vec![],
+                Problem::Shape(Expected::Struct, datom),
+            )),
+        }
+    }
+}
+
+impl Datomic for Standup {
+    fn conceive(&self) -> Datom {
+        Datom::Struct(vec![self.0.conceive(), self.1.conceive()])
     }
 }
 
@@ -429,18 +536,69 @@ fn vision_vector_of_integer() {
 #[test]
 fn vision_observed_locks_empty() {
     let source = "Observed.Locks.[]";
-    // Observed is a Variant chain — test via Reply-like type is already covered
-    let d: protos::Delineation = source.to_owned().delineate().unwrap();
+    let d: protos::Delineation = source.to_owned().protosize().unwrap();
     let datom: Datom = d.conceive().unwrap();
-    assert_eq!(datom.protosize().print(), source);
+    assert_eq!(datom.textualize(), source);
 }
 
 #[test]
 fn vision_locked_example() {
     let source = "Locked.{ 442 MyLock 6329f1 [ /abs/path ] \u{201C}why I hold it\u{201D} }";
-    let d: protos::Delineation = source.to_owned().delineate().unwrap();
+    let d: protos::Delineation = source.to_owned().protosize().unwrap();
     let datom: Datom = d.conceive().unwrap();
-    assert_eq!(datom.protosize().print(), source);
+    assert_eq!(datom.textualize(), source);
+}
+
+#[test]
+fn vision_success_variant() {
+    let source = "Success";
+    let d: protos::Delineation = source.to_owned().protosize().unwrap();
+    let datom: Datom = d.conceive().unwrap();
+    assert_eq!(datom.textualize(), source);
+}
+
+#[test]
+fn vision_note_with_meaning() {
+    let source = "{ Ada (The build passed on the third try (after two timeouts)) }";
+    let note: Note = actualize(source).unwrap();
+    assert_eq!(note.0, "Ada");
+    assert_eq!(
+        note.1,
+        Meaning::Plain("The build passed on the third try (after two timeouts)".to_owned())
+    );
+    assert_eq!(note.textualize(), source);
+}
+
+#[test]
+fn vision_remark_with_text() {
+    let source =
+        "{ Ada \u{201C}The build passed on the third try (after two timeouts)\u{201D} }";
+    let remark: Remark = actualize(source).unwrap();
+    assert_eq!(remark.0, "Ada");
+    assert_eq!(
+        remark.1,
+        "The build passed on the third try (after two timeouts)".to_owned()
+    );
+    assert_eq!(remark.textualize(), source);
+}
+
+#[test]
+fn vision_standup_with_meaning_vector() {
+    let source = "{ Backend [ (Ada fixed the flaky test (the one with the timeout)) (Bo is out (back Monday)) ] }";
+    let standup: Standup = actualize(source).unwrap();
+    assert_eq!(standup.0, "Backend");
+    assert_eq!(standup.1.len(), 2);
+    assert_eq!(
+        standup.1[0],
+        Meaning::Plain(
+            "Ada fixed the flaky test (the one with the timeout)".to_owned()
+        )
+    );
+    assert_eq!(
+        standup.1[1],
+        Meaning::Plain("Bo is out (back Monday)".to_owned())
+    );
+    assert_eq!(standup.textualize(), source);
 }
 
 // ---------------------------------------------------------------------------
@@ -448,8 +606,8 @@ fn vision_locked_example() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn corporal_fault_textualizes_and_round_trips() {
-    let fault = Fault::Corporal(vec![0, 1], Problem::Value("bad".to_owned()));
+fn corporate_fault_textualizes_and_round_trips() {
+    let fault = Fault::Corporate(vec![0, 1], Problem::Value("bad".to_owned()));
     let text = fault.textualize();
     let re_fault: Fault = actualize(&text).unwrap();
     assert_eq!(re_fault, fault);
@@ -462,7 +620,6 @@ fn structural_fault_textualizes_and_round_trips() {
         problem: protos::Problem::Unclosed(Enclosure::Braced),
     });
     let text = fault.textualize();
-    // Must produce proper datom, not Rust Debug: Structural.{ { 5 13 } Unclosed.Braced }
     assert!(
         !text.contains("Unclosed("),
         "structural fault must not contain Rust Debug: {text}"
@@ -477,7 +634,7 @@ fn structural_fault_textualizes_and_round_trips() {
 
 #[test]
 fn separator_fault_textualizes_without_debug() {
-    let fault = Fault::Corporal(vec![], Problem::Separator(Separator::Period));
+    let fault = Fault::Corporate(vec![], Problem::Separator(Separator::Period));
     let text = fault.textualize();
     assert!(
         !text.contains("Period)"),
@@ -493,7 +650,6 @@ fn expected_round_trips_through_datom() {
         Expected::Variant,
         Expected::Struct,
         Expected::Vector,
-        Expected::Map,
         Expected::Text,
         Expected::Meaning,
         Expected::Integer,
@@ -567,9 +723,9 @@ fn datom_protosize_then_conceive_round_trips() {
         Datom::Bare("alpha".to_owned()),
         Datom::Vector(vec![Datom::Bare("1".to_owned())]),
     ]);
-    let pf = datom.protosize();
-    let text = pf.print();
-    let d = text.delineate().unwrap();
+    let delineation = datom.protosize().unwrap();
+    let text = delineation.textualize();
+    let d = text.protosize().unwrap();
     let re_datom: Datom = d.conceive().unwrap();
     assert_eq!(re_datom, datom);
 }
@@ -584,54 +740,39 @@ fn structural_fault_from_unclosed() {
 }
 
 #[test]
-fn conceptual_fault_from_odd_map() {
-    let pf = Protoform::Enclosed(
-        Enclosure::Guillemets,
-        vec![Protoform::Bare("only".to_owned())],
-    );
-    let result: Result<Datom, Fault> = pf.conceive();
-    assert!(matches!(
-        result,
-        Err(Fault::Conceptual(_, Problem::Pairing))
-    ));
-}
-
-#[test]
-fn corporal_fault_from_wrong_type() {
+fn corporate_fault_from_wrong_type() {
     assert!(actualize::<i64>("True").is_err());
 }
 
 // ---------------------------------------------------------------------------
-// Box<T> tests — via impl_datomic_box! macro
+// Box<T> tests
 // ---------------------------------------------------------------------------
 
-// A recursive type that needs Box<T>: a query that can nest.
-// `impl_datomic_box!(Query)` generates Corporal<Datom> and Datomic for Box<Query>
-// transparently (a Box carries its content's datom exactly).
 #[derive(Clone, PartialEq, Eq, Debug)]
 enum Query {
     Literal(i64),
     Nested(Box<Query>),
 }
 
-impl Corporal<Datom> for Query {
+impl Incorporable<Datom> for Query {
     type Fault = Fault;
+
     fn incorporate(datom: Datom) -> Result<Self, Fault> {
         match &datom {
             Datom::Variant(head, sep, body) => {
                 if *sep != Separator::Period {
-                    return Err(Fault::Corporal(vec![], Problem::Separator(*sep)));
+                    return Err(Fault::Corporate(vec![], Problem::Separator(*sep)));
                 }
                 match (head.as_str(), body) {
                     ("Literal", Some(b)) => i64::incorporate(*b.clone()).map(Query::Literal),
                     ("Nested", Some(b)) => Box::<Query>::incorporate(*b.clone()).map(Query::Nested),
-                    _ => Err(Fault::Corporal(
+                    _ => Err(Fault::Corporate(
                         vec![],
                         Problem::UnknownVariant(head.clone()),
                     )),
                 }
             }
-            _ => Err(Fault::Corporal(
+            _ => Err(Fault::Corporate(
                 vec![],
                 Problem::Shape(Expected::Variant, datom),
             )),
@@ -640,17 +781,17 @@ impl Corporal<Datom> for Query {
 }
 
 impl Datomic for Query {
-    fn datomize(&self) -> Datom {
+    fn conceive(&self) -> Datom {
         match self {
             Query::Literal(n) => Datom::Variant(
                 "Literal".to_owned(),
                 Separator::Period,
-                Some(Box::new(n.datomize())),
+                Some(Box::new(n.conceive())),
             ),
             Query::Nested(inner) => Datom::Variant(
                 "Nested".to_owned(),
                 Separator::Period,
-                Some(Box::new(inner.datomize())),
+                Some(Box::new(inner.conceive())),
             ),
         }
     }
@@ -660,7 +801,6 @@ datomic::impl_datomic_box!(Query);
 
 #[test]
 fn box_query_recursive_round_trips() {
-    // Demonstrates impl_datomic_box!: Box<Query> carries Query's datom transparently.
     let q = Query::Nested(Box::new(Query::Nested(Box::new(Query::Literal(7)))));
     round_trip("Nested.Nested.Literal.7", q);
 }
@@ -671,8 +811,6 @@ fn box_query_recursive_round_trips() {
 
 #[test]
 fn situated_fault_datomizes_as_struct() {
-    // Matches orchestrate stderr: Unreadable.{ Some.{ 5 13 } Structural.{ { 5 13 } Unclosed.Braced } }
-    // The Situated part is: { Some.{ 5 13 } Structural.{ { 5 13 } Unclosed.Braced } }
     let inner = Fault::Structural(protos::Fault {
         extent: Extent(5, 13),
         problem: protos::Problem::Unclosed(Enclosure::Braced),
@@ -683,9 +821,7 @@ fn situated_fault_datomizes_as_struct() {
         text,
         "{ Some.{ 5 13 } Structural.{ { 5 13 } Unclosed.Braced } }"
     );
-
-    // round-trip through incorporate
-    let datom = situated.datomize();
+    let datom = situated.conceive();
     let recovered = Situated::<Fault>::incorporate(datom).unwrap();
     assert_eq!(recovered.textualize(), text);
 }
@@ -699,7 +835,21 @@ fn situated_fault_none_extent_round_trips() {
     let situated = Situated::<Fault>(None, inner);
     let text = situated.textualize();
     assert_eq!(text, "{ None Structural.{ { 5 13 } Unclosed.Braced } }");
-    let datom = situated.datomize();
+    let datom = situated.conceive();
     let recovered = Situated::<Fault>::incorporate(datom).unwrap();
     assert_eq!(recovered.textualize(), text);
+}
+
+// ---------------------------------------------------------------------------
+// Angled enclosure rejected in datom
+// ---------------------------------------------------------------------------
+
+#[test]
+fn angled_enclosure_rejected_in_datom() {
+    let pf = Protoform::Enclosed(
+        Enclosure::Angled,
+        vec![Protoform::Bare(Head::Bare("a".to_owned()))],
+    );
+    let result: Result<Datom, Fault> = pf.conceive();
+    assert!(result.is_err());
 }

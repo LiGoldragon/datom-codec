@@ -37,7 +37,7 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
 name = "datomic"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "proptest",
  "protos",
@@ -154,8 +154,8 @@ dependencies = [
 
 [[package]]
 name = "protos"
-version = "0.15.1"
-source = "git+https://github.com/LiGoldragon/protos?rev=48061367872b#48061367872b4d6f209df1f1f65f40f2818ffe1b"
+version = "0.16.0"
+source = "git+https://github.com/LiGoldragon/protos?rev=ba2d1cdaec29#ba2d1cdaec291eba3b919c88acc86c09480a4fdc"
 
 [[package]]
 name = "quick-error"
