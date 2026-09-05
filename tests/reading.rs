@@ -52,7 +52,11 @@ fn bare_words_in_a_text_position_keep_their_syntax_glyphs() {
     ] {
         let t: Text = read(word).unwrap();
         assert_eq!(t.as_ref(), word, "{word:?} reads whole");
-        assert_eq!(read::<Text>(&t.textualize()).unwrap(), t, "{word:?} round-trips");
+        assert_eq!(
+            read::<Text>(&t.textualize()).unwrap(),
+            t,
+            "{word:?} round-trips"
+        );
     }
 }
 
@@ -233,12 +237,18 @@ fn words_admit_only_one_canonical_datom_anatomy() {
     }
     for text in ["a..b", ".a", "a."] {
         let unstable = Word::try_from(text).unwrap();
-        assert_eq!(DatomWord::try_from(unstable.clone()), Err(WordRefusal::Unstable(unstable)));
+        assert_eq!(
+            DatomWord::try_from(unstable.clone()),
+            Err(WordRefusal::Unstable(unstable))
+        );
     }
     for text in ["a:b", "a!b", "a:b.c", "a!b.c", "a..b", ".a", "a."] {
         let datom = variant("Some", word(text));
         let projected = datom.protosize().unwrap();
-        let written = <datom_codec::Delineation as Textualizable<datom_codec::Delineation>>::textualize(&projected);
+        let written =
+            <datom_codec::Delineation as Textualizable<datom_codec::Delineation>>::textualize(
+                &projected,
+            );
         let reparsed = written.protosize().unwrap();
         assert_eq!(reparsed, projected, "{text:?}");
         let back: Datom = reparsed.conceive().unwrap().1;
@@ -247,7 +257,10 @@ fn words_admit_only_one_canonical_datom_anatomy() {
     for value in [3.25, -42.0, 0.5] {
         let decimal = Decimal::try_from(value).unwrap().conceive().unwrap().1;
         let projected = decimal.protosize().unwrap();
-        let written = <datom_codec::Delineation as Textualizable<datom_codec::Delineation>>::textualize(&projected);
+        let written =
+            <datom_codec::Delineation as Textualizable<datom_codec::Delineation>>::textualize(
+                &projected,
+            );
         let reparsed = written.protosize().unwrap();
         assert_eq!(reparsed, projected, "{value}");
         let back: Datom = reparsed.conceive().unwrap().1;

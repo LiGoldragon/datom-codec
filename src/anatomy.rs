@@ -111,9 +111,9 @@ impl WordProjecting for Word {
                     .expect("a period-root word has a word body");
                 Datom::Variant(head, Box::new(tail.project_word()))
             }
-            Err(WordRefusal::Unstable(word)) => Datom::Text(
-                Text::try_from(word.as_ref()).expect("a Protos word remains text"),
-            ),
+            Err(WordRefusal::Unstable(word)) => {
+                Datom::Text(Text::try_from(word.as_ref()).expect("a Protos word remains text"))
+            }
             Err(WordRefusal::Bare(_)) => unreachable!("a Word was already validated"),
         }
     }
