@@ -1,6 +1,7 @@
 Types
-[ protos:[ Text Integer Decimal Boolean Extent Separator Enclosure Boundary Head Protoform Delineation Situated ] ]
-[ Datom.[ Variant.{ Head Box<Datom> } Struct.Vector<Datom> Vector.Vector<Datom> Text.Text Meaning.Text Bare.Text ]
+[ protos:[ Text Integer Decimal Boolean Extent Separator Enclosure Boundary Head Protoform Delineation Situated Textualizable Protosizable ]
+  crate:Datomic ]
+[ Datom.[ Variant.{ Head Datom } Struct.Vector<Datom> Vector.Vector<Datom> Text.Text Meaning.Text Bare.Text ]
   Meaning.[ Plain.Text ]
   Expected.[ Variant Struct Vector Text Meaning Integer Decimal Boolean Bare ]
   Problem.[ Shape.{ Expected Datom } Arity.{ Integer Integer } UnknownVariant.Text Separator.Separator Value.Text OneValue ]

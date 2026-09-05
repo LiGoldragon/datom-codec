@@ -1,4 +1,5 @@
 Kinds
-[ protos:[ Textualizable Protosizable Conceivable Incorporable ] ]
+[ protos:[ Textualizable Protosizable Conceivable Incorporable ]
+  crate:[ Datom Fault ] ]
 [ Datomic.{ [ Sized Conceivable<Datom> ] [] [] [ incorporate_from:{ [ Datom ] [ Result<Self Fault> ] } textualize.[ Text ] ] }
   Prepending.[ prepend.{ [ Integer ] [ Self ] } ] ]
