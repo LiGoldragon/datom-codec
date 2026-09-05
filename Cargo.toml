@@ -1,6 +1,6 @@
 [package]
 name        = "datom-codec"
-version     = "0.20.0"
+version     = "0.21.0"
 edition     = "2024"
 rust-version = "1.85"
 license     = "MIT OR Apache-2.0"
@@ -9,7 +9,7 @@ description = "Datomic: positional typed data over Protos."
 publish     = false
 
 [dependencies]
-protos = { git = "https://github.com/LiGoldragon/protos", rev = "8cf5df1c1ece" }
+protos = { git = "https://github.com/LiGoldragon/protos", rev = "2d999f173334" }
 
 [dev-dependencies]
 proptest = "1.6"
