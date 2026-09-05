@@ -4,8 +4,8 @@
 use std::convert::Infallible;
 
 use protos::{
-    Boundary, Delineation, Enclosure, Head, Protoform, Protosizable, Separator, Situated,
-    Situating, Textualizable,
+    Boundary, Classifying, Delineation, Enclosure, Glyph, Head, Protoform, Protosizable, Separator,
+    Situated, Situating, Textualizable,
 };
 
 use crate::anatomy::Datom;
@@ -29,6 +29,36 @@ enum Step<'a> {
 struct Build<'a> {
     steps: Vec<Step<'a>>,
     forms: Vec<Protoform>,
+}
+
+/// The kind whose capability projects one bare run into the structural chain
+/// the Protos reader gives that exact run.
+trait BareForming {
+    fn bare_form(&self) -> Protoform;
+}
+
+impl BareForming for str {
+    fn bare_form(&self) -> Protoform {
+        let mut pieces = Vec::new();
+        let mut start = 0;
+        for (offset, glyph) in self.char_indices() {
+            if let Glyph::Separate(separator) = glyph.classify() {
+                pieces.push((&self[start..offset], separator));
+                start = offset + glyph.len_utf8();
+            }
+        }
+        if pieces.is_empty()
+            || pieces.iter().any(|(piece, _)| piece.is_empty())
+            || self[start..].is_empty()
+        {
+            return Protoform::Bare(Head::Symbol(self.to_owned()));
+        }
+        let mut form = Protoform::Bare(Head::Symbol(self[start..].to_owned()));
+        for (piece, separator) in pieces.into_iter().rev() {
+            form = Protoform::Headed(Head::Symbol(piece.to_owned()), separator, Box::new(form));
+        }
+        form
+    }
 }
 
 /// The kind whose capabilities take the build's steps.
@@ -60,16 +90,7 @@ impl<'a> Building<'a> for Build<'a> {
             Datom::Meaning(text) => self
                 .forms
                 .push(Protoform::Opaque(Boundary::Parentheses, text.clone())),
-            Datom::Word(word) => {
-                let mut forms = word
-                    .protosize()
-                    .expect("a datom word must have structural form")
-                    .0;
-                let form = forms
-                    .pop()
-                    .expect("a datom word must produce one structural form");
-                self.forms.push(form.1);
-            }
+            Datom::Word(word) => self.forms.push(word.bare_form()),
         }
     }
 
