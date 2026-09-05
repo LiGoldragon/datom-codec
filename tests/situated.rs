@@ -3,7 +3,7 @@
 mod common;
 
 use common::*;
-use datomic::{
+use datom_codec::{
     Actualizable, Boundary, Datomic, Enclosure, Expected, Extent, Fault, Found, Locus, Pathed,
     Potential, Problem, Text,
 };

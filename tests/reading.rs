@@ -4,17 +4,17 @@
 mod common;
 
 use common::*;
-use datomic::{
+use datom_codec::{
     Actualizable, Conceivable, Datom, Datomic, Expected, Found, Meaning, Potential, Problem,
     Protosizable, Refusal, Situated, Text, Textualizable,
 };
 use proptest::prelude::*;
 
-fn read<T: Datomic>(text: &str) -> Result<T, datomic::Fault> {
+fn read<T: Datomic>(text: &str) -> Result<T, datom_codec::Fault> {
     Potential::<T>::from(text).actualize()
 }
-fn value_fault(f: &datomic::Fault) -> bool {
-    matches!(f, datomic::Fault::Corporate(_, Problem::Value(_)))
+fn value_fault(f: &datom_codec::Fault) -> bool {
+    matches!(f, datom_codec::Fault::Corporate(_, Problem::Value(_)))
 }
 
 #[test]
@@ -68,7 +68,7 @@ fn text_refuses_the_closing_curly_quote() {
     );
     assert!(matches!(
         read::<Text>("“a” ”").unwrap_err(),
-        datomic::Fault::Structural(protos::Fault {
+        datom_codec::Fault::Structural(protos::Fault {
             problem: protos::Problem::Stray(protos::Boundary::CurlyQuotes),
             ..
         })
@@ -141,21 +141,21 @@ fn booleans() {
 fn a_string_position_takes_bare_quoted_and_chains_only() {
     assert_eq!(
         read::<Text>("(x)").unwrap_err(),
-        datomic::Fault::Corporate(
-            datomic::Locus {
+        datom_codec::Fault::Corporate(
+            datom_codec::Locus {
                 path: vec![],
-                extent: datomic::Extent(0, 3)
+                extent: datom_codec::Extent(0, 3)
             },
             Problem::Shape(Expected::Text, Found::Meaning)
         )
     );
     assert!(matches!(
         read::<Text>("{ a }").unwrap_err(),
-        datomic::Fault::Corporate(_, Problem::Shape(Expected::Text, Found::Struct))
+        datom_codec::Fault::Corporate(_, Problem::Shape(Expected::Text, Found::Struct))
     ));
     assert!(matches!(
         read::<Text>("Some.{ 1 }").unwrap_err(),
-        datomic::Fault::Corporate(_, Problem::Shape(Expected::Text, Found::Variant))
+        datom_codec::Fault::Corporate(_, Problem::Shape(Expected::Text, Found::Variant))
     ));
 }
 
@@ -177,7 +177,7 @@ fn meaning_escapes() {
 
 #[test]
 fn the_concept_is_situated_by_the_reader_and_by_the_writer() {
-    use datomic::Locating;
+    use datom_codec::Locating;
     let text = "{ Ada [ 12 7 -3 ] }";
     let Situated(at, datom) = text.protosize().unwrap().conceive().unwrap();
     assert_eq!(
@@ -191,7 +191,7 @@ fn the_concept_is_situated_by_the_reader_and_by_the_writer() {
             ])
         ])
     );
-    assert_eq!(at.locate(&[1, 2]), Some(datomic::Extent(13, 15)));
+    assert_eq!(at.locate(&[1, 2]), Some(datom_codec::Extent(13, 15)));
     let Ok(written) = datom.protosize();
     assert_eq!(
         written.0[0].0,

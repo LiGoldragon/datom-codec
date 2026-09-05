@@ -3,7 +3,9 @@
 
 use std::process::Command;
 
-use datomic::{Actualizable, Conceivable, Datom, Datomic, Potential, Protosizable, Textualizable};
+use datom_codec::{
+    Actualizable, Conceivable, Datom, Datomic, Potential, Protosizable, Textualizable,
+};
 
 const SIZES: [usize; 3] = [1_000, 10_000, 100_000];
 const MODES: [&str; 5] = [

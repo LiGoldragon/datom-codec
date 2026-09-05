@@ -3,7 +3,7 @@
 mod common;
 
 use common::*;
-use datomic::{Actualizable, Datomic, Potential};
+use datom_codec::{Actualizable, Datomic, Potential};
 
 fn round_trip<T: Datomic + PartialEq + std::fmt::Debug>(text: &str, value: T) {
     let potential = Potential::<T>::from(text);
@@ -136,7 +136,7 @@ fn intrinsics_actualize_alone() {
 
 #[test]
 fn the_potential_is_the_text() {
-    use datomic::Texted;
+    use datom_codec::Texted;
     let potential = Potential::<i64>::from("42");
     assert_eq!(potential.text(), "42");
 }

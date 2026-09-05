@@ -1,4 +1,4 @@
-# datomic
+# datom-codec
 
 The pure-data dialect on protos. Datom carries data, strictly typed, and its
 whole work is serialization and deserialization. Schema-driven and positional:

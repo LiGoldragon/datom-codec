@@ -1,7 +1,7 @@
 //! The vision's example types, borne Datomic the way generated code bears it.
 #![allow(dead_code)]
 
-use datomic::{
+use datom_codec::{
     Carrying, Datom, Datomic, Fault, Headed, Meaning, Positional, Problem, Site, Sited, Text,
 };
 

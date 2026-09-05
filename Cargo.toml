@@ -1,10 +1,10 @@
 [package]
-name        = "datomic"
-version     = "0.13.0"
+name        = "datom-codec"
+version     = "0.14.0"
 edition     = "2024"
 rust-version = "1.85"
 license     = "MIT OR Apache-2.0"
-repository  = "https://github.com/LiGoldragon/datomic"
+repository  = "https://github.com/LiGoldragon/datom-codec"
 description = "Datomic: positional typed data over Protos."
 publish     = false
 
@@ -15,7 +15,7 @@ protos = { git = "https://github.com/LiGoldragon/protos", rev = "205408679738" }
 proptest = "1.6"
 
 [lib]
-name = "datomic"
+name = "datom_codec"
 path = "src/lib.rs"
 
 [lints.rust]
