@@ -13,7 +13,7 @@ mod core;
 pub use core::{
     Actualizing, Budget, Budgeting, Composable, Compositional, Datom, DatomForming,
     DatomPositioning, Datomizable, Error, ErrorKind, Form, Meaning, Naming, Pathing, Positioning,
-    Positions, Potential, ProtosForming, Scalar, Variantizing,
+    Positions, Potential, PotentialExtenting, ProtosExtenting, ProtosForming, Scalar, Variantizing,
 };
 pub use derive::{Compositional, Datomizable};
 pub use protos::Symbol;

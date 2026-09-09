@@ -1,6 +1,6 @@
 use datom_codec::{
     Actualizing, Budget, Composable, Compositional, Datom, Datomizable, ErrorKind, Form, Meaning,
-    Path, Potential, Scalar,
+    Path, Potential, PotentialExtenting, Scalar,
 };
 use protos::{Protosizable, ReaderBudget, Textualizable};
 
@@ -18,7 +18,12 @@ enum Reply {
 }
 
 #[derive(Debug, PartialEq, Compositional, Datomizable)]
-struct Wrapper<T: Compositional + Datomizable> {
+enum Pair {
+    Values(i64, i64),
+}
+
+#[derive(Debug, PartialEq, Compositional, Datomizable)]
+struct Wrapper<T> {
     value: T,
 }
 
@@ -99,11 +104,45 @@ fn derived_variants_use_their_rust_names_as_heads() {
             .unwrap(),
         Reply::Pending
     );
+    assert_eq!(pending.protosize().textualize(), "Pending");
+    assert_eq!(
+        Potential::<Reply>::from("Pending")
+            .actualize(&mut Budget {
+                remaining: 1,
+                reader: ReaderBudget { remaining: 128 }
+            })
+            .unwrap(),
+        Reply::Pending
+    );
+}
+
+#[test]
+fn scalar_writers_preserve_their_textual_kind() {
+    assert_eq!(3.0_f64.datomize(vec![]).protosize().textualize(), "3.0");
+    assert_eq!((-0.0_f64).datomize(vec![]).protosize().textualize(), "-0.0");
+    assert_eq!(
+        "a{b".to_owned().datomize(vec![]).protosize().textualize(),
+        "«a{b»"
+    );
+    assert!(
+        i64::scalar(
+            &Datom {
+                path: vec![],
+                form: Form::Bare("-01".into())
+            },
+            &mut Budget {
+                remaining: 1,
+                reader: ReaderBudget { remaining: 1 }
+            }
+        )
+        .is_err()
+    );
 }
 
 #[test]
 fn qualified_heads_refuse_at_the_variant_path() {
-    let error = Potential::<Reply>::from("Accepted<String>.42")
+    let mut potential = Potential::<Reply>::from("Accepted<String>.42");
+    let error = potential
         .actualize(&mut Budget {
             remaining: 10,
             reader: ReaderBudget { remaining: 128 },
@@ -113,10 +152,14 @@ fn qualified_heads_refuse_at_the_variant_path() {
     assert!(matches!(
         error.kind,
         ErrorKind::Form {
-            expected: "Variant",
-            found: "Bare"
+            expected: "unqualified Variant",
+            found: "qualified head"
         }
     ));
+    assert_eq!(
+        potential.reader_extent(&error.path),
+        Some(protos::Extent { start: 0, end: 19 })
+    );
 }
 
 #[test]
@@ -127,10 +170,11 @@ fn protos_conversion_preserves_datoms_and_canonical_text() {
         enabled: true,
     }
     .datomize(vec![]);
-    let text = datom.protosize().unwrap().textualize();
+    let text = datom.protosize().textualize();
     assert_eq!(text, "{ Ada 42 True }");
+    assert_eq!(datom.protosize(), text.protosize().unwrap());
     let rebuilt = text.protosize().unwrap().datomize(vec![]);
-    assert_eq!(rebuilt, datom);
+    assert_eq!(rebuilt.unwrap(), datom);
 }
 
 #[test]
@@ -202,7 +246,6 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
         Some("Ada:one".to_owned())
             .datomize(vec![])
             .protosize()
-            .unwrap()
             .textualize(),
         "Some.Ada:one"
     );
@@ -210,7 +253,6 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
         Some(three_point_fourteen)
             .datomize(vec![])
             .protosize()
-            .unwrap()
             .textualize(),
         "Some.3.14"
     );
@@ -223,7 +265,7 @@ fn generic_containers_and_meaning_round_trip_their_forms() {
     };
     let datom = value.datomize(vec![]);
     assert_eq!(
-        datom.protosize().unwrap().textualize(),
+        datom.protosize().textualize(),
         "{ Some.(nested (meaning)) }"
     );
     let rebuilt: Wrapper<Option<Box<Meaning>>> = datom
@@ -276,4 +318,131 @@ fn potential_refuses_before_composition_when_reader_budget_is_exhausted() {
         .unwrap_err();
     assert_eq!(error.path, Vec::<i64>::new());
     assert!(matches!(error.kind, ErrorKind::Structural(_)));
+}
+
+#[test]
+fn unit_options_and_unit_enums_round_trip_as_bare_text() {
+    let value: Option<i64> = None;
+    assert_eq!(value.datomize(vec![]).protosize().textualize(), "None");
+    assert_eq!(
+        Potential::<Option<i64>>::from("None")
+            .actualize(&mut Budget {
+                remaining: 1,
+                reader: ReaderBudget { remaining: 128 }
+            })
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        Potential::<Reply>::from("Pending")
+            .actualize(&mut Budget {
+                remaining: 1,
+                reader: ReaderBudget { remaining: 128 }
+            })
+            .unwrap(),
+        Reply::Pending
+    );
+}
+
+#[test]
+fn datom_refuses_non_datom_structural_forms() {
+    let angled = Potential::<Vec<i64>>::from("< 1 2 >")
+        .actualize(&mut Budget {
+            remaining: 10,
+            reader: ReaderBudget { remaining: 128 },
+        })
+        .unwrap_err();
+    assert!(matches!(
+        angled.kind,
+        ErrorKind::Form {
+            expected: "Datom enclosure",
+            found: "Angled"
+        }
+    ));
+
+    let positions = Potential::<Pair>::from("Values.[ 1 2 ]")
+        .actualize(&mut Budget {
+            remaining: 10,
+            reader: ReaderBudget { remaining: 128 },
+        })
+        .unwrap_err();
+    assert!(matches!(
+        positions.kind,
+        ErrorKind::Form {
+            expected: "Struct",
+            found: "Vector"
+        }
+    ));
+}
+
+#[test]
+fn strings_quote_syntax_and_accept_temporary_meaning_text() {
+    for value in ["a{b", "a;b", "a.b", "a(b", "a!b"] {
+        let text = value.to_owned().datomize(vec![]).protosize().textualize();
+        assert!(text.starts_with('«'), "{value}: {text}");
+        assert_eq!(
+            Potential::<String>::from(text)
+                .actualize(&mut Budget {
+                    remaining: 1,
+                    reader: ReaderBudget { remaining: 128 }
+                })
+                .unwrap(),
+            value
+        );
+    }
+    assert_eq!(
+        Potential::<String>::from("(temporary meaning)")
+            .actualize(&mut Budget {
+                remaining: 1,
+                reader: ReaderBudget { remaining: 128 }
+            })
+            .unwrap(),
+        "temporary meaning"
+    );
+}
+
+#[test]
+fn retained_reader_finds_nested_composition_fault_extents() {
+    let mut vector = Potential::<Vec<i64>>::from("[ 1 x ]");
+    let error = vector
+        .actualize(&mut Budget {
+            remaining: 10,
+            reader: ReaderBudget { remaining: 128 },
+        })
+        .unwrap_err();
+    assert_eq!(error.path, vec![1]);
+    assert_eq!(
+        vector.reader_extent(&error.path),
+        Some(protos::Extent { start: 4, end: 5 })
+    );
+
+    let mut variant = Potential::<Pair>::from("Values.{ 1 x }");
+    let error = variant
+        .actualize(&mut Budget {
+            remaining: 10,
+            reader: ReaderBudget { remaining: 128 },
+        })
+        .unwrap_err();
+    assert_eq!(error.path, vec![1, 1]);
+    assert_eq!(
+        variant.reader_extent(&error.path),
+        Some(protos::Extent { start: 11, end: 12 })
+    );
+}
+
+#[test]
+fn typed_protos_errors_round_trip_without_a_reader_tree() {
+    let error = protos::Error {
+        extent: protos::Extent { start: 3, end: 4 },
+        problem: protos::Problem::Unexpected('@'),
+    };
+    let datom = error.datomize(vec![]);
+    let text = datom.protosize().textualize();
+    let rebuilt: protos::Error = Potential::from(text)
+        .actualize(&mut Budget {
+            remaining: 20,
+            reader: ReaderBudget { remaining: 128 },
+        })
+        .unwrap();
+    assert_eq!(rebuilt, error);
 }

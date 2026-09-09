@@ -19,6 +19,14 @@ pub fn compositional(input: TokenStream) -> TokenStream {
     let name = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     if let Data::Enum(data) = &input.data {
+        let unit_arms = data.variants.iter().filter_map(|variant| {
+            if !matches!(variant.fields, Fields::Unit) {
+                return None;
+            }
+            let spelling = variant.ident.to_string();
+            let name = &variant.ident;
+            Some(quote!(#spelling => Ok(Self::#name)))
+        });
         let arms = data.variants.iter().map(|variant| {
             let variant_name = &variant.ident;
             let spelling = variant_name.to_string();
@@ -28,7 +36,7 @@ pub fn compositional(input: TokenStream) -> TokenStream {
             let build = match fields { Fields::Named(named) => { let names = named.named.iter().map(|field| field.ident.as_ref().unwrap()); quote!(Self::#variant_name { #(#names: #bindings),* }) }, Fields::Unnamed(_) => quote!(Self::#variant_name(#(#bindings),*)), Fields::Unit => quote!(Self::#variant_name) };
             let count = fields.len();
             if count == 0 {
-                quote!(#spelling => match &body.form { ::datom_codec::Form::Bare(value) if value.is_empty() => Ok(#build), found => Err(::datom_codec::Error { path: body.path.clone(), kind: ::datom_codec::ErrorKind::Form { expected: "empty variant", found: "body" } }) })
+                quote!(#spelling => Err(::datom_codec::Error { path: datom.path.clone(), kind: ::datom_codec::ErrorKind::Form { expected: "bare variant", found: "Variant" } }))
             } else if count == 1 {
                 let binding = &bindings[0];
                 quote!(#spelling => { let #binding = body.compose(budget)?; Ok(#build) })
@@ -42,8 +50,10 @@ quote!(#spelling => { let mut positions = ::datom_codec::DatomPositioning::varia
                 fn from_positions(_: ::datom_codec::Positions<'_>, _: &mut ::datom_codec::Budget) -> Result<Self, ::datom_codec::Error> { unreachable!("enums compose from a variant form") }
                 fn compose(datom: &::datom_codec::Datom, budget: &mut ::datom_codec::Budget) -> Result<Self, ::datom_codec::Error> {
                     use ::datom_codec::{Composable, Positioning, Variantizing};
-                    let (head, body) = datom.variant(budget, "Variant")?;
-                    match head { #(#arms,)* other => Err(::datom_codec::Error { path: datom.path.clone(), kind: ::datom_codec::ErrorKind::Variant { expected: stringify!(#name), found: other.to_owned() } }) }
+                    match &datom.form {
+                        ::datom_codec::Form::Bare(head) => match head.as_str() { #(#unit_arms,)* other => Err(::datom_codec::Error { path: datom.path.clone(), kind: ::datom_codec::ErrorKind::Variant { expected: stringify!(#name), found: other.to_owned() } }) },
+                        _ => { let (head, body) = datom.variant(budget, "Variant")?; match head { #(#arms,)* other => Err(::datom_codec::Error { path: datom.path.clone(), kind: ::datom_codec::ErrorKind::Variant { expected: stringify!(#name), found: other.to_owned() } }) } }
+                    }
                 }
             }
         }.into();
@@ -52,6 +62,15 @@ quote!(#spelling => { let mut positions = ::datom_codec::DatomPositioning::varia
         Ok(fields) => fields,
         Err(error) => return error,
     };
+    let mut bounded_generics = input.generics.clone();
+    for field in fields {
+        let ty = &field.ty;
+        bounded_generics
+            .make_where_clause()
+            .predicates
+            .push(syn::parse_quote!(#ty: ::datom_codec::Compositional));
+    }
+    let (impl_generics, ty_generics, where_clause) = bounded_generics.split_for_impl();
     let reads = fields.iter().enumerate().map(|(index, field)| {
         let ty = &field.ty;
         let binding = syn::Ident::new(&format!("field_{index}"), proc_macro2::Span::call_site());
@@ -99,10 +118,15 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
                 1 => { let binding = &bindings[0]; quote!((#binding).datomize(at.child(1))) },
                 _ => quote!(::datom_codec::Datom { path: at.child(1), form: ::datom_codec::Form::Struct(vec![#(#child_values),*]) }),
             };
-            quote!(#pattern => ::datom_codec::Datom { path: at.clone(), form: ::datom_codec::Form::Variant(::datom_codec::Symbol(#spelling.to_owned()), Box::new(#body)) })
+            if variant.fields.is_empty() {
+                quote!(#pattern => ::datom_codec::Datom { path: at.clone(), form: ::datom_codec::Form::Bare(#spelling.to_owned()) })
+            } else {
+                quote!(#pattern => ::datom_codec::Datom { path: at.clone(), form: ::datom_codec::Form::Variant(::datom_codec::Symbol(#spelling.to_owned()), Box::new(#body)) })
+            }
         });
         return quote! {
             impl #impl_generics ::datom_codec::Datomizable for #name #ty_generics #where_clause {
+                type Output = ::datom_codec::Datom;
                 fn datomize(&self, at: ::datom_codec::Path) -> ::datom_codec::Datom {
                     use ::datom_codec::{Datomizable, Pathing};
                     match self { #(#arms),* }
@@ -115,6 +139,14 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
         Ok(fields) => fields,
         Err(error) => return error,
     };
+    let mut bounded_generics = input.generics.clone();
+    for field in fields {
+        let ty = &field.ty;
+        bounded_generics.make_where_clause().predicates.push(
+            syn::parse_quote!(#ty: ::datom_codec::Datomizable<Output = ::datom_codec::Datom>),
+        );
+    }
+    let (impl_generics, ty_generics, where_clause) = bounded_generics.split_for_impl();
     let values: Vec<_> = fields
         .iter()
         .enumerate()
@@ -131,6 +163,7 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
         .collect();
     quote! {
         impl #impl_generics ::datom_codec::Datomizable for #name #ty_generics #where_clause {
+            type Output = ::datom_codec::Datom;
             fn datomize(&self, at: ::datom_codec::Path) -> ::datom_codec::Datom {
                 use ::datom_codec::{Datomizable, Pathing};
                 ::datom_codec::Datom { path: at.clone(), form: ::datom_codec::Form::Struct(vec![#(#values),*]) }
