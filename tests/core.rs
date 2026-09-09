@@ -102,6 +102,24 @@ fn derived_variants_use_their_rust_names_as_heads() {
 }
 
 #[test]
+fn qualified_heads_refuse_at_the_variant_path() {
+    let error = Potential::<Reply>::from("Accepted<String>.42")
+        .actualize(&mut Budget {
+            remaining: 10,
+            reader: ReaderBudget { remaining: 128 },
+        })
+        .unwrap_err();
+    assert_eq!(error.path, Vec::<i64>::new());
+    assert!(matches!(
+        error.kind,
+        ErrorKind::Form {
+            expected: "Variant",
+            found: "Bare"
+        }
+    ));
+}
+
+#[test]
 fn protos_conversion_preserves_datoms_and_canonical_text() {
     let datom = Score {
         name: "Ada".into(),

@@ -234,6 +234,7 @@ impl ProtosForming for Datom {
             Form::Variant(head, body) => protos::Protos::Headed {
                 extent: protos::Extent::empty(),
                 head: head.clone(),
+                constraints: None,
                 separator: protos::Separator::Period,
                 body: Box::new(body.protos_form()),
             },
@@ -296,7 +297,12 @@ impl DatomForming for protos::Protos {
                     .collect(),
             ),
             protos::Protos::Headed {
+                constraints: Some(_),
+                ..
+            } => Form::Bare(protos::Textualizable::textualize(self)),
+            protos::Protos::Headed {
                 head,
+                constraints: None,
                 separator: protos::Separator::Period,
                 body,
                 ..
@@ -310,6 +316,7 @@ impl DatomForming for protos::Protos {
             }
             protos::Protos::Headed {
                 head,
+                constraints: None,
                 separator: protos::Separator::Period,
                 body,
                 ..
