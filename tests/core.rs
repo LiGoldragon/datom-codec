@@ -1,6 +1,6 @@
 use datom_codec::{
-    Actualizing, Budget, Composable, Compositional, Datom, Datomizable, ErrorKind, Form, Meaning,
-    Path, Potential, PotentialExtenting, Scalar,
+    Actualizing, Budget, Composable, Compositional, Datom, Datomizable, Error, ErrorKind,
+    ErrorLayer, Form, Meaning, Path, Potential, PotentialExtenting, Scalar,
 };
 use protos::{Protosizable, ReaderBudget, Textualizable};
 
@@ -151,10 +151,8 @@ fn qualified_heads_refuse_at_the_variant_path() {
     assert_eq!(error.path, Vec::<i64>::new());
     assert!(matches!(
         error.kind,
-        ErrorKind::Form {
-            expected: "unqualified Variant",
-            found: "qualified head"
-        }
+        ErrorKind::Form { ref expected, ref found }
+            if expected == "unqualified Variant" && found == "qualified head"
     ));
     assert_eq!(
         potential.reader_extent(&error.path),
@@ -354,10 +352,8 @@ fn datom_refuses_non_datom_structural_forms() {
         .unwrap_err();
     assert!(matches!(
         angled.kind,
-        ErrorKind::Form {
-            expected: "Datom enclosure",
-            found: "Angled"
-        }
+        ErrorKind::Form { ref expected, ref found }
+            if expected == "Datom enclosure" && found == "Angled"
     ));
 
     let positions = Potential::<Pair>::from("Values.[ 1 2 ]")
@@ -368,10 +364,8 @@ fn datom_refuses_non_datom_structural_forms() {
         .unwrap_err();
     assert!(matches!(
         positions.kind,
-        ErrorKind::Form {
-            expected: "Struct",
-            found: "Vector"
-        }
+        ErrorKind::Form { ref expected, ref found }
+            if expected == "Struct" && found == "Vector"
     ));
 }
 
@@ -441,6 +435,55 @@ fn typed_protos_errors_round_trip_without_a_reader_tree() {
     let rebuilt: protos::Error = Potential::from(text)
         .actualize(&mut Budget {
             remaining: 20,
+            reader: ReaderBudget { remaining: 128 },
+        })
+        .unwrap();
+    assert_eq!(rebuilt, error);
+}
+
+#[derive(Debug, PartialEq, Compositional, Datomizable)]
+enum GenericReply<T> {
+    Pending,
+    One(T),
+    Pair(T, i64),
+    Named { value: T, label: String },
+}
+
+#[test]
+fn generic_enum_derives_bound_every_payload_shape() {
+    let budget = || Budget {
+        remaining: 50,
+        reader: ReaderBudget { remaining: 128 },
+    };
+    for value in [
+        GenericReply::Pending,
+        GenericReply::One(7_i64),
+        GenericReply::Pair(7_i64, 8),
+        GenericReply::Named {
+            value: 7_i64,
+            label: "Ada".into(),
+        },
+    ] {
+        let datom = value.datomize(vec![]);
+        let rebuilt: GenericReply<i64> = datom.compose(&mut budget()).unwrap();
+        assert_eq!(rebuilt, value);
+    }
+}
+
+#[test]
+fn datom_errors_round_trip_with_their_raising_layer() {
+    let error = Error {
+        layer: ErrorLayer::Datom,
+        path: vec![1, 0],
+        kind: ErrorKind::Form {
+            expected: "Datom enclosure".into(),
+            found: "Angled".into(),
+        },
+    };
+    let text = error.datomize(vec![]).protosize().textualize();
+    let rebuilt: Error = Potential::from(text)
+        .actualize(&mut Budget {
+            remaining: 30,
             reader: ReaderBudget { remaining: 128 },
         })
         .unwrap();

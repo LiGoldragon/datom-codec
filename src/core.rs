@@ -32,6 +32,7 @@ impl Budgeting for Budget {
     fn spend(&mut self, path: &Path) -> Result<(), Error> {
         if self.remaining <= 0 {
             return Err(Error {
+                layer: ErrorLayer::Composition,
                 path: path.clone(),
                 kind: ErrorKind::Budget,
             });
@@ -42,30 +43,37 @@ impl Budgeting for Budget {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ErrorLayer {
+    Protos,
+    Datom,
+    Composition,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Error {
+    pub layer: ErrorLayer,
     pub path: Path,
     pub kind: ErrorKind,
+}
+pub trait ErrorRaising {
+    fn composition(path: Path, kind: ErrorKind) -> Self;
+}
+impl ErrorRaising for Error {
+    fn composition(path: Path, kind: ErrorKind) -> Self {
+        Self {
+            layer: ErrorLayer::Composition,
+            path,
+            kind,
+        }
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
     Budget,
     Structural(protos::Error),
-    Form {
-        expected: &'static str,
-        found: &'static str,
-    },
-    Arity {
-        expected: Integer,
-        found: Integer,
-    },
-    Value {
-        expected: &'static str,
-        value: String,
-    },
-    Variant {
-        expected: &'static str,
-        found: String,
-    },
+    Form { expected: String, found: String },
+    Arity { expected: Integer, found: Integer },
+    Value { expected: String, value: String },
+    Variant { expected: String, found: String },
 }
 pub trait ProtosExtenting {
     fn extent(&self) -> protos::Extent;
@@ -132,6 +140,7 @@ pub trait Positioning {
 impl Positioning for Positions<'_> {
     fn position<T: Compositional>(&mut self, budget: &mut Budget) -> Result<T, Error> {
         let child = self.children.get(self.next).ok_or_else(|| Error {
+            layer: ErrorLayer::Composition,
             path: self.path.clone(),
             kind: ErrorKind::Arity {
                 expected: self.next as Integer + 1,
@@ -146,6 +155,7 @@ impl Positioning for Positions<'_> {
             Ok(())
         } else {
             Err(Error {
+                layer: ErrorLayer::Composition,
                 path: self.path.clone(),
                 kind: ErrorKind::Arity {
                     expected: self.next as Integer,
@@ -181,10 +191,11 @@ impl DatomPositioning for Datom {
             Form::Struct(children) => children,
             found => {
                 return Err(Error {
+                    layer: ErrorLayer::Composition,
                     path: self.path.clone(),
                     kind: ErrorKind::Form {
-                        expected,
-                        found: found.form_name(),
+                        expected: expected.to_owned(),
+                        found: found.form_name().to_owned(),
                     },
                 });
             }
@@ -202,6 +213,177 @@ impl DatomPositioning for Datom {
 impl Composable for Datom {
     fn compose<T: Compositional>(&self, budget: &mut Budget) -> Result<T, Error> {
         T::compose(self, budget)
+    }
+}
+
+impl Datomizable for ErrorLayer {
+    type Output = Datom;
+    fn datomize(&self, at: Path) -> Datom {
+        let name = match self {
+            Self::Protos => "Protos",
+            Self::Datom => "Datom",
+            Self::Composition => "Composition",
+        };
+        Datom {
+            path: at,
+            form: Form::Bare(name.to_owned()),
+        }
+    }
+}
+impl Compositional for ErrorLayer {
+    const ARITY: Integer = 0;
+    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
+        unreachable!()
+    }
+    fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
+        budget.spend(&datom.path)?;
+        match &datom.form {
+            Form::Bare(name) => match name.as_str() {
+                "Protos" => Ok(Self::Protos),
+                "Datom" => Ok(Self::Datom),
+                "Composition" => Ok(Self::Composition),
+                found => Err(Error::composition(
+                    datom.path.clone(),
+                    ErrorKind::Variant {
+                        expected: "ErrorLayer".into(),
+                        found: found.to_owned(),
+                    },
+                )),
+            },
+            found => Err(Error::composition(
+                datom.path.clone(),
+                ErrorKind::Form {
+                    expected: "Bare".into(),
+                    found: found.form_name().to_owned(),
+                },
+            )),
+        }
+    }
+}
+impl Datomizable for ErrorKind {
+    type Output = Datom;
+    fn datomize(&self, at: Path) -> Datom {
+        match self {
+            Self::Budget => Datom {
+                path: at,
+                form: Form::Bare("Budget".into()),
+            },
+            Self::Structural(error) => error.datomize(at.child(1)).named_variant(at, "Structural"),
+            Self::Form { expected, found } => Datom {
+                path: at.clone(),
+                form: Form::Struct(vec![
+                    expected.datomize(at.child(1).child(0)),
+                    found.datomize(at.child(1).child(1)),
+                ]),
+            }
+            .named_variant(at, "Form"),
+            Self::Arity { expected, found } => Datom {
+                path: at.clone(),
+                form: Form::Struct(vec![
+                    expected.datomize(at.child(1).child(0)),
+                    found.datomize(at.child(1).child(1)),
+                ]),
+            }
+            .named_variant(at, "Arity"),
+            Self::Value { expected, value } => Datom {
+                path: at.clone(),
+                form: Form::Struct(vec![
+                    expected.datomize(at.child(1).child(0)),
+                    value.datomize(at.child(1).child(1)),
+                ]),
+            }
+            .named_variant(at, "Value"),
+            Self::Variant { expected, found } => Datom {
+                path: at.clone(),
+                form: Form::Struct(vec![
+                    expected.datomize(at.child(1).child(0)),
+                    found.datomize(at.child(1).child(1)),
+                ]),
+            }
+            .named_variant(at, "Variant"),
+        }
+    }
+}
+impl Compositional for ErrorKind {
+    const ARITY: Integer = 1;
+    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
+        unreachable!()
+    }
+    fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
+        if matches!(&datom.form, Form::Bare(name) if name == "Budget") {
+            budget.spend(&datom.path)?;
+            return Ok(Self::Budget);
+        }
+        let (head, body) = datom.variant(budget, "ErrorKind")?;
+        let mut positions = body.positions("Struct")?;
+        let value = match head {
+            "Structural" => Self::Structural(positions.position(budget)?),
+            "Form" => Self::Form {
+                expected: positions.position(budget)?,
+                found: positions.position(budget)?,
+            },
+            "Arity" => Self::Arity {
+                expected: positions.position(budget)?,
+                found: positions.position(budget)?,
+            },
+            "Value" => Self::Value {
+                expected: positions.position(budget)?,
+                value: positions.position(budget)?,
+            },
+            "Variant" => Self::Variant {
+                expected: positions.position(budget)?,
+                found: positions.position(budget)?,
+            },
+            found => {
+                return Err(Error::composition(
+                    datom.path.clone(),
+                    ErrorKind::Variant {
+                        expected: "ErrorKind".into(),
+                        found: found.to_owned(),
+                    },
+                ));
+            }
+        };
+        positions.finish()?;
+        Ok(value)
+    }
+}
+impl Datomizable for Error {
+    type Output = Datom;
+    fn datomize(&self, at: Path) -> Datom {
+        Datom {
+            path: at.clone(),
+            form: Form::Struct(vec![
+                self.layer.datomize(at.child(1).child(0)),
+                self.path.datomize(at.child(1).child(1)),
+                self.kind.datomize(at.child(1).child(2)),
+            ]),
+        }
+        .named_variant(at, "Error")
+    }
+}
+impl Compositional for Error {
+    const ARITY: Integer = 3;
+    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
+        unreachable!()
+    }
+    fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
+        let (head, body) = datom.variant(budget, "Error")?;
+        if head != "Error" {
+            return Err(Error::composition(
+                datom.path.clone(),
+                ErrorKind::Variant {
+                    expected: "Error".into(),
+                    found: head.to_owned(),
+                },
+            ));
+        }
+        let mut positions = body.positions("Struct")?;
+        let layer = positions.position(budget)?;
+        let path = positions.position(budget)?;
+        let kind = positions.position(budget)?;
+        positions.finish()?;
+        Ok(Self { layer, path, kind })
     }
 }
 
@@ -247,6 +429,7 @@ impl<T: Compositional> Actualizing<T> for Potential<T> {
             .text
             .protosize_with(&mut budget.reader)
             .map_err(|error| Error {
+                layer: ErrorLayer::Protos,
                 path: Path::new(),
                 kind: ErrorKind::Structural(error),
             })?;
@@ -443,10 +626,11 @@ impl DatomForming for protos::Protos {
                 ..
             } => {
                 return Err(Error {
+                    layer: ErrorLayer::Datom,
                     path,
                     kind: ErrorKind::Form {
-                        expected: "Datom enclosure",
-                        found: "Angled",
+                        expected: "Datom enclosure".into(),
+                        found: "Angled".into(),
                     },
                 });
             }
@@ -455,10 +639,11 @@ impl DatomForming for protos::Protos {
                 ..
             } => {
                 return Err(Error {
+                    layer: ErrorLayer::Datom,
                     path,
                     kind: ErrorKind::Form {
-                        expected: "unqualified Variant",
-                        found: "qualified head",
+                        expected: "unqualified Variant".into(),
+                        found: "qualified head".into(),
                     },
                 });
             }
@@ -607,10 +792,11 @@ impl<T: Compositional> Compositional for Vec<T> {
             Form::Vector(children) => children,
             found => {
                 return Err(Error {
+                    layer: ErrorLayer::Composition,
                     path: datom.path.clone(),
                     kind: ErrorKind::Form {
-                        expected: "Vector",
-                        found: found.form_name(),
+                        expected: "Vector".into(),
+                        found: found.form_name().to_owned(),
                     },
                 });
             }
@@ -640,10 +826,11 @@ impl Compositional for Meaning {
         match &datom.form {
             Form::Meaning(value) => Ok(Self(value.clone())),
             found => Err(Error {
+                layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
                 kind: ErrorKind::Form {
-                    expected: "Meaning",
-                    found: found.form_name(),
+                    expected: "Meaning".into(),
+                    found: found.form_name().to_owned(),
                 },
             }),
         }
@@ -687,10 +874,11 @@ impl Variantizing for Datom {
         match &self.form {
             Form::Variant(head, body) => Ok((&head.0, body)),
             found => Err(Error {
+                layer: ErrorLayer::Composition,
                 path: self.path.clone(),
                 kind: ErrorKind::Form {
-                    expected,
-                    found: found.form_name(),
+                    expected: expected.to_owned(),
+                    found: found.form_name().to_owned(),
                 },
             }),
         }
@@ -725,9 +913,10 @@ impl<T: Compositional> Compositional for Option<T> {
             "Some" => Ok(Some(body.compose(budget)?)),
             "None" if matches!(body.form, Form::Bare(ref value) if value.is_empty()) => Ok(None),
             found => Err(Error {
+                layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
                 kind: ErrorKind::Variant {
-                    expected: "Option",
+                    expected: "Option".into(),
                     found: found.to_owned(),
                 },
             }),
@@ -754,9 +943,10 @@ impl<T: Compositional, E: Compositional> Compositional for Result<T, E> {
             "Ok" => Ok(Ok(body.compose(budget)?)),
             "Err" => Ok(Err(body.compose(budget)?)),
             found => Err(Error {
+                layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
                 kind: ErrorKind::Variant {
-                    expected: "Result",
+                    expected: "Result".into(),
                     found: found.to_owned(),
                 },
             }),
@@ -785,16 +975,18 @@ impl Compositional for protos::Extent {
         positions.finish()?;
         Ok(Self {
             start: start.try_into().map_err(|_| Error {
+                layer: ErrorLayer::Composition,
                 path: Path::new(),
                 kind: ErrorKind::Value {
-                    expected: "non-negative extent",
+                    expected: "non-negative extent".into(),
                     value: start.to_string(),
                 },
             })?,
             end: end.try_into().map_err(|_| Error {
+                layer: ErrorLayer::Composition,
                 path: Path::new(),
                 kind: ErrorKind::Value {
-                    expected: "non-negative extent",
+                    expected: "non-negative extent".into(),
                     value: end.to_string(),
                 },
             })?,
@@ -804,9 +996,10 @@ impl Compositional for protos::Extent {
         let (head, body) = datom.variant(budget, "Extent")?;
         if head != "Extent" {
             return Err(Error {
+                layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
                 kind: ErrorKind::Variant {
-                    expected: "Extent",
+                    expected: "Extent".into(),
                     found: head.to_owned(),
                 },
             });
@@ -841,17 +1034,19 @@ impl Compositional for protos::Separator {
             Form::Bare(name) if name == "Exclamation" => Ok(Self::Exclamation),
             Form::Bare(name) if name == "Colon" => Ok(Self::Colon),
             Form::Bare(name) => Err(Error {
+                layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
                 kind: ErrorKind::Variant {
-                    expected: "Separator",
+                    expected: "Separator".into(),
                     found: name.clone(),
                 },
             }),
             found => Err(Error {
+                layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
                 kind: ErrorKind::Form {
-                    expected: "Separator",
-                    found: found.form_name(),
+                    expected: "Separator".into(),
+                    found: found.form_name().to_owned(),
                 },
             }),
         }
@@ -909,9 +1104,10 @@ impl Compositional for protos::Problem {
                 "Budget" => Ok(Self::Budget),
                 "Depth" => Ok(Self::Depth),
                 _ => Err(Error {
+                    layer: ErrorLayer::Composition,
                     path: datom.path.clone(),
                     kind: ErrorKind::Variant {
-                        expected: "Problem",
+                        expected: "Problem".into(),
                         found: name.clone(),
                     },
                 }),
@@ -922,9 +1118,10 @@ impl Compositional for protos::Problem {
         let mut characters = character.chars();
         let Some(character) = characters.next().filter(|_| characters.next().is_none()) else {
             return Err(Error {
+                layer: ErrorLayer::Composition,
                 path: body.path.clone(),
                 kind: ErrorKind::Value {
-                    expected: "one character",
+                    expected: "one character".into(),
                     value: character,
                 },
             });
@@ -933,9 +1130,10 @@ impl Compositional for protos::Problem {
             "Unclosed" => Ok(Self::Unclosed(character)),
             "Unexpected" => Ok(Self::Unexpected(character)),
             found => Err(Error {
+                layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
                 kind: ErrorKind::Variant {
-                    expected: "Problem",
+                    expected: "Problem".into(),
                     found: found.to_owned(),
                 },
             }),
@@ -965,9 +1163,10 @@ impl Compositional for protos::Error {
         let (head, body) = datom.variant(budget, "ProtosError")?;
         if head != "ProtosError" {
             return Err(Error {
+                layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
                 kind: ErrorKind::Variant {
-                    expected: "ProtosError",
+                    expected: "ProtosError".into(),
                     found: head.to_owned(),
                 },
             });
@@ -989,10 +1188,11 @@ impl Scalar for String {
         match &datom.form {
             Form::Bare(value) | Form::String(value) | Form::Meaning(value) => Ok(value.clone()),
             found => Err(Error {
+                layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
                 kind: ErrorKind::Form {
-                    expected: "String",
-                    found: found.form_name(),
+                    expected: "String".into(),
+                    found: found.form_name().to_owned(),
                 },
             }),
         }
@@ -1005,27 +1205,30 @@ impl Scalar for i64 {
             Form::Bare(value) => value,
             found => {
                 return Err(Error {
+                    layer: ErrorLayer::Composition,
                     path: datom.path.clone(),
                     kind: ErrorKind::Form {
-                        expected: "Bare",
-                        found: found.form_name(),
+                        expected: "Bare".into(),
+                        found: found.form_name().to_owned(),
                     },
                 });
             }
         };
         if value.starts_with("-0") || (value.len() > 1 && value.starts_with('0')) {
             return Err(Error {
+                layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
                 kind: ErrorKind::Value {
-                    expected: "Integer",
+                    expected: "Integer".into(),
                     value: value.clone(),
                 },
             });
         }
         i64::from_str(value).map_err(|_| Error {
+            layer: ErrorLayer::Composition,
             path: datom.path.clone(),
             kind: ErrorKind::Value {
-                expected: "Integer",
+                expected: "Integer".into(),
                 value: value.clone(),
             },
         })
@@ -1038,17 +1241,19 @@ impl Scalar for bool {
             Form::Bare(value) if value == "True" => Ok(true),
             Form::Bare(value) if value == "False" => Ok(false),
             Form::Bare(value) => Err(Error {
+                layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
                 kind: ErrorKind::Value {
-                    expected: "Boolean",
+                    expected: "Boolean".into(),
                     value: value.clone(),
                 },
             }),
             found => Err(Error {
+                layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
                 kind: ErrorKind::Form {
-                    expected: "Bare",
-                    found: found.form_name(),
+                    expected: "Bare".into(),
+                    found: found.form_name().to_owned(),
                 },
             }),
         }
@@ -1061,19 +1266,21 @@ impl Scalar for f64 {
             Form::Bare(value) if value.contains('.') => value,
             Form::Bare(value) => {
                 return Err(Error {
+                    layer: ErrorLayer::Composition,
                     path: datom.path.clone(),
                     kind: ErrorKind::Value {
-                        expected: "Decimal",
+                        expected: "Decimal".into(),
                         value: value.clone(),
                     },
                 });
             }
             found => {
                 return Err(Error {
+                    layer: ErrorLayer::Composition,
                     path: datom.path.clone(),
                     kind: ErrorKind::Form {
-                        expected: "Bare",
-                        found: found.form_name(),
+                        expected: "Bare".into(),
+                        found: found.form_name().to_owned(),
                     },
                 });
             }
@@ -1083,9 +1290,10 @@ impl Scalar for f64 {
             .ok()
             .filter(|value| value.is_finite())
             .ok_or_else(|| Error {
+                layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
                 kind: ErrorKind::Value {
-                    expected: "Decimal",
+                    expected: "Decimal".into(),
                     value: value.clone(),
                 },
             })
