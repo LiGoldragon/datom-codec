@@ -19,15 +19,13 @@ pub fn compositional(input: TokenStream) -> TokenStream {
     let name = &input.ident;
     if let Data::Enum(data) = &input.data {
         let mut bounded_generics = input.generics.clone();
-        for variant in &data.variants {
-            for field in &variant.fields {
-                let ty = &field.ty;
-                if !quote!(#ty).to_string().contains(&name.to_string()) {
-                    bounded_generics
-                        .make_where_clause()
-                        .predicates
-                        .push(syn::parse_quote!(#ty: ::datom_codec::Compositional));
-                }
+        for parameter in &input.generics.params {
+            if let syn::GenericParam::Type(parameter) = parameter {
+                let ident = &parameter.ident;
+                bounded_generics
+                    .make_where_clause()
+                    .predicates
+                    .push(syn::parse_quote!(#ident: ::datom_codec::Compositional));
             }
         }
         let (impl_generics, ty_generics, where_clause) = bounded_generics.split_for_impl();
@@ -119,14 +117,12 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
     let name = &input.ident;
     if let Data::Enum(data) = &input.data {
         let mut bounded_generics = input.generics.clone();
-        for variant in &data.variants {
-            for field in &variant.fields {
-                let ty = &field.ty;
-                if !quote!(#ty).to_string().contains(&name.to_string()) {
-                    bounded_generics.make_where_clause().predicates.push(
-                        syn::parse_quote!(#ty: ::datom_codec::Datomizable<Output = ::datom_codec::Datom>),
-                    );
-                }
+        for parameter in &input.generics.params {
+            if let syn::GenericParam::Type(parameter) = parameter {
+                let ident = &parameter.ident;
+                bounded_generics.make_where_clause().predicates.push(
+                    syn::parse_quote!(#ident: ::datom_codec::Datomizable<Output = ::datom_codec::Datom>),
+                );
             }
         }
         let (impl_generics, ty_generics, where_clause) = bounded_generics.split_for_impl();

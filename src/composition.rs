@@ -5,94 +5,169 @@ use crate::*;
 pub trait DatomForming {
     fn datom_form(&self, path: Path) -> Result<Datom, Error>;
 }
-impl DatomForming for protos::Protos {
-    fn datom_form(&self, path: Path) -> Result<Datom, Error> {
-        let form = match self {
-            protos::Protos::Bare { text, .. } => Form::Bare(text.clone()),
-            protos::Protos::Opaque {
-                boundary: protos::Boundary::Guillemets,
-                content,
-                ..
-            } => Form::String(content.clone()),
-            protos::Protos::Opaque {
-                boundary: protos::Boundary::Parentheses,
-                content,
-                ..
-            } => Form::Meaning(content.clone()),
-            protos::Protos::Enclosed {
-                enclosure: protos::Enclosure::Braced,
-                children,
-                ..
-            } => Form::Struct(
-                children
-                    .iter()
-                    .enumerate()
-                    .map(|(index, child)| child.datom_form(path.child(index as Integer)))
-                    .collect::<Result<Vec<_>, _>>()?,
-            ),
-            protos::Protos::Enclosed {
-                enclosure: protos::Enclosure::Bracketed,
-                children,
-                ..
-            } => Form::Vector(
-                children
-                    .iter()
-                    .enumerate()
-                    .map(|(index, child)| child.datom_form(path.child(index as Integer)))
-                    .collect::<Result<Vec<_>, _>>()?,
-            ),
-            protos::Protos::Enclosed {
-                enclosure: protos::Enclosure::Angled,
-                ..
-            } => {
-                return Err(Error {
-                    layer: ErrorLayer::Datom,
-                    path,
-                    kind: ErrorKind::Form {
-                        expected: "Datom enclosure".into(),
-                        found: "Angled".into(),
-                    },
-                });
-            }
-            protos::Protos::Headed {
-                constraints: Some(_),
-                ..
-            } => {
-                return Err(Error {
-                    layer: ErrorLayer::Datom,
-                    path,
-                    kind: ErrorKind::Form {
-                        expected: "unqualified Variant".into(),
-                        found: "qualified head".into(),
-                    },
-                });
-            }
-            protos::Protos::Headed {
-                head,
-                constraints: None,
-                separator: protos::Separator::Period,
-                body,
-                ..
-            } if head.0.parse::<i64>().is_ok()
-                && matches!(body.as_ref(), protos::Protos::Bare { text, .. } if text.chars().all(|character| character.is_ascii_digit())) =>
-            {
-                let protos::Protos::Bare { text, .. } = body.as_ref() else {
-                    unreachable!()
-                };
-                Form::Bare(format!("{}.{}", head.0, text))
-            }
-            protos::Protos::Headed {
-                head,
-                constraints: None,
-                separator: protos::Separator::Period,
-                body,
-                ..
-            } => Form::Variant(head.clone(), Box::new(body.datom_form(path.child(1))?)),
-            protos::Protos::Headed { .. } => Form::Bare(protos::Textualizable::textualize(self)),
+
+const MAXIMUM_FORMING_DEPTH: Integer = 4_096;
+
+enum Forming<'a> {
+    Visit(&'a protos::Protos, Path, Integer),
+    Enclosed(Path, bool, usize),
+    Headed(Path, protos::Symbol),
+}
+struct Former<'a> {
+    work: Vec<Forming<'a>>,
+    values: Vec<Datom>,
+}
+trait FormingDatoms<'a> {
+    fn form(root: &'a protos::Protos, path: Path) -> Result<Datom, Error>;
+}
+impl<'a> FormingDatoms<'a> for Former<'a> {
+    fn form(root: &'a protos::Protos, path: Path) -> Result<Datom, Error> {
+        let mut former = Self {
+            work: vec![Forming::Visit(root, path, 0)],
+            values: Vec::new(),
         };
-        Ok(Datom { path, form })
+        while let Some(work) = former.work.pop() {
+            match work {
+                Forming::Visit(protos, path, depth) => {
+                    if depth >= MAXIMUM_FORMING_DEPTH {
+                        return Err(Error {
+                            layer: ErrorLayer::Datom,
+                            path,
+                            kind: ErrorKind::Budget,
+                        });
+                    }
+                    match protos {
+                        protos::Protos::Bare { text, .. } => former.values.push(Datom {
+                            path,
+                            form: Form::Bare(text.clone()),
+                        }),
+                        protos::Protos::Opaque {
+                            boundary: protos::Boundary::Guillemets,
+                            content,
+                            ..
+                        } => former.values.push(Datom {
+                            path,
+                            form: Form::String(content.clone()),
+                        }),
+                        protos::Protos::Opaque {
+                            boundary: protos::Boundary::Parentheses,
+                            content,
+                            ..
+                        } => former.values.push(Datom {
+                            path,
+                            form: Form::Meaning(content.clone()),
+                        }),
+                        protos::Protos::Enclosed {
+                            enclosure: protos::Enclosure::Braced,
+                            children,
+                            ..
+                        }
+                        | protos::Protos::Enclosed {
+                            enclosure: protos::Enclosure::Bracketed,
+                            children,
+                            ..
+                        } => {
+                            let structure = matches!(
+                                protos,
+                                protos::Protos::Enclosed {
+                                    enclosure: protos::Enclosure::Braced,
+                                    ..
+                                }
+                            );
+                            former.work.push(Forming::Enclosed(
+                                path.clone(),
+                                structure,
+                                children.len(),
+                            ));
+                            for (index, child) in children.iter().enumerate().rev() {
+                                former.work.push(Forming::Visit(
+                                    child,
+                                    path.child(index as Integer),
+                                    depth + 1,
+                                ));
+                            }
+                        }
+                        protos::Protos::Enclosed {
+                            enclosure: protos::Enclosure::Angled,
+                            ..
+                        } => {
+                            return Err(Error {
+                                layer: ErrorLayer::Datom,
+                                path,
+                                kind: ErrorKind::Form {
+                                    expected: "Datom enclosure".into(),
+                                    found: "Angled".into(),
+                                },
+                            });
+                        }
+                        protos::Protos::Headed {
+                            constraints: Some(_),
+                            ..
+                        } => {
+                            return Err(Error {
+                                layer: ErrorLayer::Datom,
+                                path,
+                                kind: ErrorKind::Form {
+                                    expected: "unqualified Variant".into(),
+                                    found: "qualified head".into(),
+                                },
+                            });
+                        }
+                        protos::Protos::Headed {
+                            head,
+                            constraints: None,
+                            separator: protos::Separator::Period,
+                            body,
+                            ..
+                        } => {
+                            former
+                                .work
+                                .push(Forming::Headed(path.clone(), head.clone()));
+                            former
+                                .work
+                                .push(Forming::Visit(body, path.child(1), depth + 1));
+                        }
+                        protos::Protos::Headed { .. } => former.values.push(Datom {
+                            path,
+                            form: Form::Bare(protos::Textualizable::textualize(protos)),
+                        }),
+                    }
+                }
+                Forming::Enclosed(path, structure, count) => {
+                    let children = former.values.split_off(former.values.len() - count);
+                    former.values.push(Datom {
+                        path,
+                        form: if structure {
+                            Form::Struct(children)
+                        } else {
+                            Form::Vector(children)
+                        },
+                    });
+                }
+                Forming::Headed(path, head) => {
+                    let body = former.values.pop().expect("formed headed body");
+                    let form = match &body.form {
+                        Form::Bare(text)
+                            if head.0.parse::<i64>().is_ok()
+                                && text.chars().all(|character| character.is_ascii_digit()) =>
+                        {
+                            Form::Bare(format!("{}.{}", head.0, text))
+                        }
+                        _ => Form::Variant(head, Box::new(body)),
+                    };
+                    former.values.push(Datom { path, form });
+                }
+            }
+        }
+        Ok(former.values.pop().expect("formed root"))
     }
 }
+impl DatomForming for protos::Protos {
+    fn datom_form(&self, path: Path) -> Result<Datom, Error> {
+        Former::form(self, path)
+    }
+}
+
 impl Datomizable for protos::Protos {
     type Output = Result<Datom, Error>;
     fn datomize(&self, at: Path) -> Self::Output {

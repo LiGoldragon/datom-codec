@@ -565,9 +565,7 @@ fn manually_built_hundred_thousand_deep_datom_projects_and_drops_iteratively() {
     }
     let protos = datom.protosize();
     assert_eq!(protos.textualize().len(), 200_001);
-    // Protos owns its independent deep-tree drop policy; this witness verifies
-    // Datom's projection and destruction without recursively destroying that result.
-    std::mem::forget(protos);
+    drop(protos);
     drop(datom);
 }
 
@@ -665,4 +663,73 @@ fn recursive_generic_enum_derives_without_a_self_bound_cycle() {
         })
         .unwrap();
     assert_eq!(rebuilt, value);
+}
+
+#[derive(Debug, PartialEq, Compositional, Datomizable)]
+struct NodeData<T>(T);
+#[derive(Debug, PartialEq, Compositional, Datomizable)]
+enum Node<T> {
+    Data(NodeData<T>),
+    Next(Box<Node<T>>),
+}
+#[derive(Debug, PartialEq, Compositional, Datomizable)]
+enum MutualA<T> {
+    End,
+    Next(Box<MutualB<T>>),
+}
+#[derive(Debug, PartialEq, Compositional, Datomizable)]
+enum MutualB<T> {
+    Next(Box<MutualA<T>>),
+    Data(T),
+}
+
+#[test]
+fn exact_self_detection_bounds_similarly_named_wrappers_without_cycles() {
+    let value = Node::Data(NodeData(7_i64));
+    let datom = value.datomize(vec![]);
+    let rebuilt: Node<i64> = datom
+        .compose(&mut Budget {
+            remaining: 100,
+            reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 128,
+        })
+        .unwrap();
+    assert_eq!(rebuilt, value);
+    let mutual = MutualA::Next(Box::new(MutualB::Data(8_i64)));
+    let datom = mutual.datomize(vec![]);
+    let rebuilt: MutualA<i64> = datom
+        .compose(&mut Budget {
+            remaining: 100,
+            reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 128,
+        })
+        .unwrap();
+    assert_eq!(rebuilt, mutual);
+}
+
+#[test]
+fn manually_built_hundred_thousand_deep_protos_refuses_or_forms_without_recursion() {
+    let mut protos = protos::Protos::Bare {
+        extent: protos::Extent { start: 0, end: 1 },
+        text: "x".into(),
+    };
+    for index in 0..100_000 {
+        protos = protos::Protos::Headed {
+            extent: protos::Extent {
+                start: 0,
+                end: index + 3,
+            },
+            head: protos::Symbol("V".into()),
+            constraints: None,
+            separator: protos::Separator::Period,
+            body: Box::new(protos),
+        };
+    }
+    let error = protos
+        .datomize(vec![])
+        .expect_err("manual headed tree reaches the typed depth refusal");
+    assert_eq!(error.kind, ErrorKind::Budget);
+    drop(protos);
 }
