@@ -8,8 +8,12 @@ repository  = "https://github.com/LiGoldragon/datom-codec"
 description = "Datomic: positional typed data over Protos."
 publish     = false
 
+[workspace]
+members = ["crates/datom-codec-derive"]
+
 [dependencies]
-protos = { git = "https://github.com/LiGoldragon/protos", rev = "2d999f173334" }
+protos = { git = "https://github.com/LiGoldragon/protos", rev = "12739e22df25" }
+derive = { package = "datom-codec-derive", path = "crates/datom-codec-derive" }
 
 [dev-dependencies]
 proptest = "1.6"
@@ -22,7 +26,3 @@ path = "src/lib.rs"
 unsafe_code = "forbid"
 unused      = { level = "warn", priority = -1 }
 dead_code   = "warn"
-
-[[test]]
-name = "scale"
-harness = false

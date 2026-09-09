@@ -39,8 +39,18 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 name = "datom-codec"
 version = "0.21.0"
 dependencies = [
+ "datom-codec-derive",
  "proptest",
  "protos",
+]
+
+[[package]]
+name = "datom-codec-derive"
+version = "0.21.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -154,8 +164,8 @@ dependencies = [
 
 [[package]]
 name = "protos"
-version = "0.26.0"
-source = "git+https://github.com/LiGoldragon/protos?rev=2d999f173334#2d999f1733347b7e64e24b2f75ba889ad7182bc0"
+version = "0.27.0"
+source = "git+https://github.com/LiGoldragon/protos?rev=12739e22df25#12739e22df254ebcf530be64ab7d3be7c36ad735"
 
 [[package]]
 name = "quick-error"
