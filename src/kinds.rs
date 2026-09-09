@@ -1,22 +1,16 @@
 //! The kinds of the dialect: what a corporate type bears, and what a reader is handed.
 
-use std::borrow::Cow;
+use std::{borrow::Cow, convert::Infallible};
 
-use protos::{Integer, Text, Textualizable};
+use protos::{Conceivable, Integer, Opaque, Text, Textualizable, Word};
 
 use crate::anatomy::{Datom, Expected, Fault, Found, Problem};
 use crate::site::{Positions, Site, Variant};
 
 /// The kind every corporate type of the dialect bears.
-pub trait Datomic: Sized {
+pub trait Datomic: Sized + Conceivable<Datom, Fault = Infallible> + Textualizable<Datom> {
     /// The value, from a datom at its situation.
     fn incorporate(site: Site<'_>) -> Result<Self, Fault>;
-    /// The datom of the value.
-    fn conceive(&self) -> Datom;
-    /// The canonical text: conceive, protosize, textualize.
-    fn textualize(&self) -> String {
-        self.conceive().textualize()
-    }
 }
 
 /// The kind a scalar bears: read from one bare word, written to one.
@@ -37,12 +31,12 @@ pub trait Worded: Sized {
         let word = site.word(Self::EXPECTED)?;
         match Self::from_word(&word) {
             Some(value) => Ok(value),
-            None => Err(site.refuse(Problem::Value(word.into_owned()))),
+            None => Err(site.refuse(Problem::Value(Opaque::from(word.into_owned())))),
         }
     }
     /// The datom of the value: its word.
     fn conceive_word(&self) -> Datom {
-        Datom::Word(self.to_word())
+        Datom::Word(Word::try_from(self.to_word()).expect("a scalar word is a word run"))
     }
 }
 
@@ -55,13 +49,13 @@ pub trait Sited<'a> {
     /// The variant: a bare word or a head with its body.
     fn variant(self) -> Result<Variant<'a>, Fault>;
     /// The bare word, or a chain of bare words rejoined, in a position expecting the scalar.
-    fn word(self, expected: Expected) -> Result<Cow<'a, str>, Fault>;
+    fn word(&self, expected: Expected) -> Result<Cow<'a, str>, Fault>;
     /// The text: a word, quoted text, or a chain of words rejoined.
-    fn text(self) -> Result<Text, Fault>;
+    fn text(&self) -> Result<Text, Fault>;
     /// The form found here.
-    fn found(self) -> Found;
+    fn found(&self) -> Found;
     /// A corporate fault here.
-    fn refuse(self, problem: Problem) -> Fault;
+    fn refuse(&self, problem: Problem) -> Fault;
 }
 
 /// The kind positions bear: each read in turn as the type `T` its position declares.
@@ -88,4 +82,6 @@ pub trait Headed<'a>: Sized {
     fn positions(self, arity: Integer) -> Result<Positions<'a>, Fault>;
     /// Nothing: the variant itself, which must be bare.
     fn nothing(self) -> Result<Self, Fault>;
+    /// A corporate fault at this variant.
+    fn reject(&self, problem: Problem) -> Fault;
 }

@@ -1,7 +1,9 @@
 //! The scalars: each reads from one bare word and writes to one, and every
 //! worded type bears Datomic through the one generic interaction.
 
-use protos::{Boolean, Boundary, Decimal, Enclosure, Integer, Separator};
+use std::convert::Infallible;
+
+use protos::{Boolean, Boundary, Conceivable, Decimal, Enclosure, Integer, Separator, Situated, Situation};
 
 use crate::anatomy::{Datom, Expected, Fault, Found};
 use crate::kinds::{Datomic, Worded};
@@ -226,8 +228,13 @@ impl Datomic for Integer {
         Self::incorporate_word(site)
     }
 
-    fn conceive(&self) -> Datom {
-        self.conceive_word()
+}
+
+impl Conceivable<Datom> for Integer {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
+        Ok(Situated(Situation { extent: protos::Extent(0, 0), children: vec![] }, self.conceive_word()))
     }
 }
 
@@ -236,8 +243,13 @@ impl Datomic for Decimal {
         Self::incorporate_word(site)
     }
 
-    fn conceive(&self) -> Datom {
-        self.conceive_word()
+}
+
+impl Conceivable<Datom> for Decimal {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
+        Ok(Situated(Situation { extent: protos::Extent(0, 0), children: vec![] }, self.conceive_word()))
     }
 }
 
@@ -246,8 +258,13 @@ impl Datomic for Boolean {
         Self::incorporate_word(site)
     }
 
-    fn conceive(&self) -> Datom {
-        self.conceive_word()
+}
+
+impl Conceivable<Datom> for Boolean {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
+        Ok(Situated(Situation { extent: protos::Extent(0, 0), children: vec![] }, self.conceive_word()))
     }
 }
 
@@ -256,8 +273,13 @@ impl Datomic for Expected {
         Self::incorporate_word(site)
     }
 
-    fn conceive(&self) -> Datom {
-        self.conceive_word()
+}
+
+impl Conceivable<Datom> for Expected {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
+        Ok(Situated(Situation { extent: protos::Extent(0, 0), children: vec![] }, self.conceive_word()))
     }
 }
 
@@ -266,8 +288,13 @@ impl Datomic for Found {
         Self::incorporate_word(site)
     }
 
-    fn conceive(&self) -> Datom {
-        self.conceive_word()
+}
+
+impl Conceivable<Datom> for Found {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
+        Ok(Situated(Situation { extent: protos::Extent(0, 0), children: vec![] }, self.conceive_word()))
     }
 }
 
@@ -276,8 +303,13 @@ impl Datomic for Separator {
         Self::incorporate_word(site)
     }
 
-    fn conceive(&self) -> Datom {
-        self.conceive_word()
+}
+
+impl Conceivable<Datom> for Separator {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
+        Ok(Situated(Situation { extent: protos::Extent(0, 0), children: vec![] }, self.conceive_word()))
     }
 }
 
@@ -286,8 +318,13 @@ impl Datomic for Enclosure {
         Self::incorporate_word(site)
     }
 
-    fn conceive(&self) -> Datom {
-        self.conceive_word()
+}
+
+impl Conceivable<Datom> for Enclosure {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
+        Ok(Situated(Situation { extent: protos::Extent(0, 0), children: vec![] }, self.conceive_word()))
     }
 }
 
@@ -296,7 +333,12 @@ impl Datomic for Boundary {
         Self::incorporate_word(site)
     }
 
-    fn conceive(&self) -> Datom {
-        self.conceive_word()
+}
+
+impl Conceivable<Datom> for Boundary {
+    type Fault = Infallible;
+
+    fn conceive(&self) -> Result<protos::Situated<Datom>, Self::Fault> {
+        Ok(Situated(Situation { extent: protos::Extent(0, 0), children: vec![] }, self.conceive_word()))
     }
 }
