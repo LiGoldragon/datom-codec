@@ -650,6 +650,57 @@ enum RecursiveNode<T> {
     Next(Box<RecursiveNode<T>>),
 }
 
+#[derive(Debug, PartialEq, Compositional, Datomizable)]
+struct Chain {
+    string: String,
+    chain_option: Option<Box<Chain>>,
+}
+
+#[derive(Debug, PartialEq, Compositional, Datomizable)]
+struct GenericChain<T> {
+    value: T,
+    next: Option<Box<GenericChain<T>>>,
+}
+
+#[test]
+fn recursive_struct_derives_without_a_self_bound_cycle() {
+    let value = Chain {
+        string: "root".into(),
+        chain_option: Some(Box::new(Chain {
+            string: "tail".into(),
+            chain_option: None,
+        })),
+    };
+    let datom = value.datomize(vec![]);
+    let rebuilt: Chain = datom
+        .compose(&mut Budget {
+            remaining: 100,
+            reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 128,
+        })
+        .unwrap();
+    assert_eq!(rebuilt, value);
+
+    let generic = GenericChain {
+        value: 7_i64,
+        next: Some(Box::new(GenericChain {
+            value: 8,
+            next: None,
+        })),
+    };
+    let datom = generic.datomize(vec![]);
+    let rebuilt: GenericChain<i64> = datom
+        .compose(&mut Budget {
+            remaining: 100,
+            reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 128,
+        })
+        .unwrap();
+    assert_eq!(rebuilt, generic);
+}
+
 #[test]
 fn recursive_generic_enum_derives_without_a_self_bound_cycle() {
     let value = RecursiveNode::Next(Box::new(RecursiveNode::Leaf(7_i64)));
