@@ -8,13 +8,16 @@
 //! `textualize` on the way out.
 //! Every fault names its layer, its path and its extent in the text.
 
+mod composition;
 mod core;
+mod dropping;
+mod projection;
 
+pub use composition::{DatomForming, Meaning, Scalar, Variantizing};
 pub use core::{
-    Actualizing, Budget, Budgeting, Composable, Compositional, Datom, DatomForming,
-    DatomPositioning, Datomizable, Error, ErrorKind, ErrorLayer, ErrorRaising, Form, Meaning,
-    Naming, Pathing, Positioning, Positions, Potential, PotentialExtenting, ProtosExtenting,
-    ProtosForming, Scalar, Variantizing,
+    Actualizing, Budget, Budgeting, Composable, CompositionDepthing, Compositional, Datom,
+    DatomPositioning, Datomizable, Error, ErrorKind, ErrorLayer, ErrorRaising, Form, Naming,
+    Pathing, Positioning, Positions, Potential, PotentialExtenting, ProtosExtenting,
 };
 pub use derive::{Compositional, Datomizable};
 pub use protos::Symbol;

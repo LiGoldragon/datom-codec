@@ -1,35 +1,32 @@
-//! Iterative drop for the datom tree: a deep datom never recurses on its way out.
+use std::mem;
 
-use protos::Word;
+use crate::{Datom, Form};
 
-use crate::anatomy::{Datom, WordProjecting};
-
-/// The kind whose capability moves a node's children out onto a worklist, leaving the node a leaf.
-trait Shedding {
-    fn shed(&mut self, work: &mut Vec<Datom>);
+trait TreeDropping {
+    fn empty_tree(&mut self) -> Form;
 }
-
-impl Shedding for Datom {
-    fn shed(&mut self, work: &mut Vec<Datom>) {
-        match self {
-            Datom::Variant(_, body) => {
-                work.push(std::mem::replace(
-                    body.as_mut(),
-                    Word::try_from("_").unwrap().project_word(),
-                ));
-            }
-            Datom::Struct(children) | Datom::Vector(children) => work.append(children),
-            Datom::Text(_) | Datom::Meaning(_) | Datom::Word(_) => {}
-        }
+impl TreeDropping for Datom {
+    fn empty_tree(&mut self) -> Form {
+        mem::replace(&mut self.form, Form::Bare(String::new()))
     }
 }
 
 impl Drop for Datom {
     fn drop(&mut self) {
-        let mut work = Vec::new();
-        self.shed(&mut work);
-        while let Some(mut datom) = work.pop() {
-            datom.shed(&mut work);
+        let mut forms = vec![self.empty_tree()];
+        while let Some(form) = forms.pop() {
+            match form {
+                Form::Variant(_, body) => {
+                    let mut body = *body;
+                    forms.push(body.empty_tree());
+                }
+                Form::Struct(children) | Form::Vector(children) => {
+                    for mut child in children {
+                        forms.push(child.empty_tree());
+                    }
+                }
+                Form::Bare(_) | Form::String(_) | Form::Meaning(_) => {}
+            }
         }
     }
 }

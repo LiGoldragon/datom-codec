@@ -1,6 +1,7 @@
 use datom_codec::{
     Actualizing, Budget, Composable, Compositional, Datom, Datomizable, Error, ErrorKind,
-    ErrorLayer, Form, Meaning, Path, Potential, PotentialExtenting, Scalar,
+    ErrorLayer, ErrorRaising, Form, Meaning, Path, Potential, PotentialExtenting, ProtosExtenting,
+    Scalar,
 };
 use protos::{Protosizable, ReaderBudget, Textualizable};
 
@@ -50,6 +51,8 @@ fn derived_struct_composes_its_typed_positions() {
         .compose(&mut Budget {
             remaining: 10,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(
@@ -74,6 +77,8 @@ fn scalar_refusal_keeps_the_datom_path() {
         &mut Budget {
             remaining: 1,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         },
     )
     .unwrap_err();
@@ -89,7 +94,9 @@ fn derived_variants_use_their_rust_names_as_heads() {
         datom
             .compose::<Reply>(&mut Budget {
                 remaining: 10,
-                reader: ReaderBudget { remaining: 10 }
+                reader: ReaderBudget { remaining: 10 },
+                depth: 0,
+                maximum_depth: 4_096
             })
             .unwrap(),
         value
@@ -99,7 +106,9 @@ fn derived_variants_use_their_rust_names_as_heads() {
         pending
             .compose::<Reply>(&mut Budget {
                 remaining: 10,
-                reader: ReaderBudget { remaining: 10 }
+                reader: ReaderBudget { remaining: 10 },
+                depth: 0,
+                maximum_depth: 4_096
             })
             .unwrap(),
         Reply::Pending
@@ -109,7 +118,9 @@ fn derived_variants_use_their_rust_names_as_heads() {
         Potential::<Reply>::from("Pending")
             .actualize(&mut Budget {
                 remaining: 1,
-                reader: ReaderBudget { remaining: 128 }
+                reader: ReaderBudget { remaining: 128 },
+                depth: 0,
+                maximum_depth: 4_096
             })
             .unwrap(),
         Reply::Pending
@@ -132,7 +143,9 @@ fn scalar_writers_preserve_their_textual_kind() {
             },
             &mut Budget {
                 remaining: 1,
-                reader: ReaderBudget { remaining: 1 }
+                reader: ReaderBudget { remaining: 1 },
+                depth: 0,
+                maximum_depth: 4_096
             }
         )
         .is_err()
@@ -146,6 +159,8 @@ fn qualified_heads_refuse_at_the_variant_path() {
         .actualize(&mut Budget {
             remaining: 10,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(error.path, Vec::<i64>::new());
@@ -181,6 +196,8 @@ fn potential_actualizes_text_through_protos_and_datom() {
         .actualize(&mut Budget {
             remaining: 10,
             reader: ReaderBudget { remaining: 10 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(
@@ -200,6 +217,8 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
         .actualize(&mut Budget {
             remaining: 1,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(timestamp, "2026-09-03T17:46:20");
@@ -207,6 +226,8 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
         .actualize(&mut Budget {
             remaining: 1,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(name, "Ada:one");
@@ -215,6 +236,8 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
         .actualize(&mut Budget {
             remaining: 2,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(string, Some("42".into()));
@@ -222,6 +245,8 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
         .actualize(&mut Budget {
             remaining: 2,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(integer, Some(42));
@@ -229,6 +254,8 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
         .actualize(&mut Budget {
             remaining: 1,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(decimal, three_point_fourteen);
@@ -236,6 +263,8 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
         .actualize(&mut Budget {
             remaining: 2,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(optional_decimal, Some(three_point_fourteen));
@@ -270,6 +299,8 @@ fn generic_containers_and_meaning_round_trip_their_forms() {
         .compose(&mut Budget {
             remaining: 10,
             reader: ReaderBudget { remaining: 10 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(rebuilt, value);
@@ -279,7 +310,9 @@ fn generic_containers_and_meaning_round_trip_their_forms() {
         datom
             .compose::<Result<i64, String>>(&mut Budget {
                 remaining: 10,
-                reader: ReaderBudget { remaining: 10 }
+                reader: ReaderBudget { remaining: 10 },
+                depth: 0,
+                maximum_depth: 4_096
             })
             .unwrap(),
         result
@@ -292,6 +325,8 @@ fn potential_reports_structural_and_budget_errors_at_their_context() {
         .actualize(&mut Budget {
             remaining: 10,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(structural.path, Vec::<i64>::new());
@@ -300,6 +335,8 @@ fn potential_reports_structural_and_budget_errors_at_their_context() {
         .actualize(&mut Budget {
             remaining: 0,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(exhausted.path, Vec::<i64>::new());
@@ -312,6 +349,8 @@ fn potential_refuses_before_composition_when_reader_budget_is_exhausted() {
         .actualize(&mut Budget {
             remaining: 1,
             reader: ReaderBudget { remaining: 0 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(error.path, Vec::<i64>::new());
@@ -326,7 +365,9 @@ fn unit_options_and_unit_enums_round_trip_as_bare_text() {
         Potential::<Option<i64>>::from("None")
             .actualize(&mut Budget {
                 remaining: 1,
-                reader: ReaderBudget { remaining: 128 }
+                reader: ReaderBudget { remaining: 128 },
+                depth: 0,
+                maximum_depth: 4_096
             })
             .unwrap(),
         None
@@ -335,7 +376,9 @@ fn unit_options_and_unit_enums_round_trip_as_bare_text() {
         Potential::<Reply>::from("Pending")
             .actualize(&mut Budget {
                 remaining: 1,
-                reader: ReaderBudget { remaining: 128 }
+                reader: ReaderBudget { remaining: 128 },
+                depth: 0,
+                maximum_depth: 4_096
             })
             .unwrap(),
         Reply::Pending
@@ -348,6 +391,8 @@ fn datom_refuses_non_datom_structural_forms() {
         .actualize(&mut Budget {
             remaining: 10,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap_err();
     assert!(matches!(
@@ -360,6 +405,8 @@ fn datom_refuses_non_datom_structural_forms() {
         .actualize(&mut Budget {
             remaining: 10,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap_err();
     assert!(matches!(
@@ -378,7 +425,9 @@ fn strings_quote_syntax_and_accept_temporary_meaning_text() {
             Potential::<String>::from(text)
                 .actualize(&mut Budget {
                     remaining: 1,
-                    reader: ReaderBudget { remaining: 128 }
+                    reader: ReaderBudget { remaining: 128 },
+                    depth: 0,
+                    maximum_depth: 4_096
                 })
                 .unwrap(),
             value
@@ -388,7 +437,9 @@ fn strings_quote_syntax_and_accept_temporary_meaning_text() {
         Potential::<String>::from("(temporary meaning)")
             .actualize(&mut Budget {
                 remaining: 1,
-                reader: ReaderBudget { remaining: 128 }
+                reader: ReaderBudget { remaining: 128 },
+                depth: 0,
+                maximum_depth: 4_096
             })
             .unwrap(),
         "temporary meaning"
@@ -402,6 +453,8 @@ fn retained_reader_finds_nested_composition_fault_extents() {
         .actualize(&mut Budget {
             remaining: 10,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(error.path, vec![1]);
@@ -415,6 +468,8 @@ fn retained_reader_finds_nested_composition_fault_extents() {
         .actualize(&mut Budget {
             remaining: 10,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(error.path, vec![1, 1]);
@@ -436,6 +491,8 @@ fn typed_protos_errors_round_trip_without_a_reader_tree() {
         .actualize(&mut Budget {
             remaining: 20,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(rebuilt, error);
@@ -454,6 +511,8 @@ fn generic_enum_derives_bound_every_payload_shape() {
     let budget = || Budget {
         remaining: 50,
         reader: ReaderBudget { remaining: 128 },
+        depth: 0,
+        maximum_depth: 4_096,
     };
     for value in [
         GenericReply::Pending,
@@ -485,7 +544,125 @@ fn datom_errors_round_trip_with_their_raising_layer() {
         .actualize(&mut Budget {
             remaining: 30,
             reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(rebuilt, error);
+}
+
+#[test]
+fn manually_built_hundred_thousand_deep_datom_projects_and_drops_iteratively() {
+    let mut datom = Datom {
+        path: vec![],
+        form: Form::Bare("x".into()),
+    };
+    for _ in 0..100_000 {
+        datom = Datom {
+            path: vec![],
+            form: Form::Variant(protos::Symbol("V".into()), Box::new(datom)),
+        };
+    }
+    let protos = datom.protosize();
+    assert_eq!(protos.textualize().len(), 200_001);
+    // Protos owns its independent deep-tree drop policy; this witness verifies
+    // Datom's projection and destruction without recursively destroying that result.
+    std::mem::forget(protos);
+    drop(datom);
+}
+
+#[test]
+fn composition_depth_is_bounded_independently_from_node_budget() {
+    let mut datom = Datom {
+        path: vec![],
+        form: Form::Bare("Pending".into()),
+    };
+    for _ in 0..128 {
+        datom = Datom {
+            path: vec![],
+            form: Form::Variant(protos::Symbol("Next".into()), Box::new(datom)),
+        };
+    }
+    let error = datom
+        .compose::<Recursive>(&mut Budget {
+            remaining: 1_000_000,
+            reader: ReaderBudget {
+                remaining: 1_000_000,
+            },
+            depth: 0,
+            maximum_depth: 32,
+        })
+        .unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Budget);
+}
+
+#[derive(Debug, PartialEq)]
+struct Recursive(usize);
+impl Compositional for Recursive {
+    const ARITY: i64 = 0;
+    fn from_positions(_: datom_codec::Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
+        unreachable!()
+    }
+    fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
+        use datom_codec::{Composable, Variantizing};
+        if matches!(&datom.form, Form::Bare(name) if name == "Pending") {
+            return Ok(Self(0));
+        }
+        let (head, body) = datom.variant(budget, "Recursive")?;
+        if head != "Next" {
+            return Err(datom_codec::Error::composition(
+                datom.path.clone(),
+                ErrorKind::Variant {
+                    expected: "Recursive".into(),
+                    found: head.into(),
+                },
+            ));
+        }
+        Ok(Self(body.compose::<Recursive>(budget)?.0 + 1))
+    }
+}
+
+#[test]
+fn wide_projection_keeps_canonical_extents() {
+    let datom = Datom {
+        path: vec![],
+        form: Form::Struct(
+            (0..10_000)
+                .map(|index| Datom {
+                    path: vec![index],
+                    form: Form::Bare("x".into()),
+                })
+                .collect(),
+        ),
+    };
+    let protos = datom.protosize();
+    assert_eq!(protos.textualize().len(), 20_003);
+    assert_eq!(
+        protos.extent(),
+        protos::Extent {
+            start: 0,
+            end: 20_003
+        }
+    );
+}
+
+#[derive(Debug, PartialEq, Compositional, Datomizable)]
+enum RecursiveNode<T> {
+    Leaf(T),
+    Next(Box<RecursiveNode<T>>),
+}
+
+#[test]
+fn recursive_generic_enum_derives_without_a_self_bound_cycle() {
+    let value = RecursiveNode::Next(Box::new(RecursiveNode::Leaf(7_i64)));
+    let datom = value.datomize(vec![]);
+    let rebuilt: RecursiveNode<i64> = datom
+        .compose(&mut Budget {
+            remaining: 100,
+            reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 128,
+        })
+        .unwrap();
+    assert_eq!(rebuilt, value);
 }

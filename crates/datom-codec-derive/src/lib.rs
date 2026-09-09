@@ -22,10 +22,12 @@ pub fn compositional(input: TokenStream) -> TokenStream {
         for variant in &data.variants {
             for field in &variant.fields {
                 let ty = &field.ty;
-                bounded_generics
-                    .make_where_clause()
-                    .predicates
-                    .push(syn::parse_quote!(#ty: ::datom_codec::Compositional));
+                if !quote!(#ty).to_string().contains(&name.to_string()) {
+                    bounded_generics
+                        .make_where_clause()
+                        .predicates
+                        .push(syn::parse_quote!(#ty: ::datom_codec::Compositional));
+                }
             }
         }
         let (impl_generics, ty_generics, where_clause) = bounded_generics.split_for_impl();
@@ -120,9 +122,11 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
         for variant in &data.variants {
             for field in &variant.fields {
                 let ty = &field.ty;
-                bounded_generics.make_where_clause().predicates.push(
-                    syn::parse_quote!(#ty: ::datom_codec::Datomizable<Output = ::datom_codec::Datom>),
-                );
+                if !quote!(#ty).to_string().contains(&name.to_string()) {
+                    bounded_generics.make_where_clause().predicates.push(
+                        syn::parse_quote!(#ty: ::datom_codec::Datomizable<Output = ::datom_codec::Datom>),
+                    );
+                }
             }
         }
         let (impl_generics, ty_generics, where_clause) = bounded_generics.split_for_impl();
