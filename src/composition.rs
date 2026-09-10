@@ -183,7 +183,7 @@ impl Datomizable for String {
                 character.is_whitespace()
                     || matches!(
                         character,
-                        '{' | '}' | '[' | ']' | '<' | '>' | '«' | '»' | '(' | ')' | ';' | '.' | '!'
+                        '{' | '}' | '[' | ']' | '<' | '>' | '«' | '»' | '(' | ')' | ';'
                     )
             }) {
             Form::String(self.clone())
@@ -199,7 +199,83 @@ impl Compositional for String {
         unreachable!("strings compose from a scalar form")
     }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
-        Self::scalar(datom, budget)
+        datom.compose_bare_string(budget)
+    }
+}
+
+trait BareStringComposing {
+    fn compose_bare_string(&self, budget: &mut Budget) -> Result<String, Error>;
+}
+
+impl BareStringComposing for Datom {
+    fn compose_bare_string(&self, budget: &mut Budget) -> Result<String, Error> {
+        let mut current = self;
+        let mut depth = budget.depth;
+        let mut value = String::new();
+        loop {
+            budget.spend(&current.path)?;
+            let text = match &current.form {
+                Form::Bare(text) | Form::String(text) | Form::Meaning(text) if value.is_empty() => {
+                    return Ok(text.clone());
+                }
+                Form::Bare(text) => text,
+                Form::Variant(head, body) => {
+                    if depth >= budget.maximum_depth {
+                        return Err(Error::composition(body.path.clone(), ErrorKind::Budget));
+                    }
+                    depth += 1;
+                    if head.0.is_empty()
+                        || head.0.chars().any(|character| {
+                            character.is_whitespace()
+                                || matches!(
+                                    character,
+                                    '{' | '}' | '[' | ']' | '<' | '>' | '«' | '»' | '(' | ')' | ';'
+                                )
+                        })
+                    {
+                        return Err(Error::composition(
+                            current.path.clone(),
+                            ErrorKind::Form {
+                                expected: "String".into(),
+                                found: "Variant".into(),
+                            },
+                        ));
+                    }
+                    value.push_str(&head.0);
+                    value.push('.');
+                    current = body;
+                    continue;
+                }
+                found => {
+                    return Err(Error::composition(
+                        current.path.clone(),
+                        ErrorKind::Form {
+                            expected: "String".into(),
+                            found: found.form_name().to_owned(),
+                        },
+                    ));
+                }
+            };
+            if text.is_empty()
+                || text.chars().any(|character| {
+                    character.is_whitespace()
+                        || matches!(
+                            character,
+                            '{' | '}' | '[' | ']' | '<' | '>' | '«' | '»' | '(' | ')' | ';'
+                        )
+                })
+            {
+                return Err(Error::composition(
+                    current.path.clone(),
+                    ErrorKind::Form {
+                        expected: "bare String".into(),
+                        found: current.form.form_name().to_owned(),
+                    },
+                ));
+            }
+            value.push_str(text);
+            return Ok(value);
+        }
     }
 }
 impl Datomizable for i64 {

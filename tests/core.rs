@@ -19,6 +19,18 @@ enum Reply {
 }
 
 #[derive(Debug, PartialEq, Compositional, Datomizable)]
+enum Message {
+    Reply(Reply),
+}
+
+#[derive(Debug, PartialEq, Compositional, Datomizable)]
+struct PunctuatedStrings {
+    model: String,
+    url: String,
+    qualified_name: String,
+}
+
+#[derive(Debug, PartialEq, Compositional, Datomizable)]
 enum Pair {
     Values(i64, i64),
 }
@@ -305,6 +317,109 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
 }
 
 #[test]
+fn typed_string_positions_resolve_bare_syntax_characters() {
+    let text = "{ gpt-5.6-luna https://example.org/a Upper.Case }";
+    let expected = PunctuatedStrings {
+        model: "gpt-5.6-luna".into(),
+        url: "https://example.org/a".into(),
+        qualified_name: "Upper.Case".into(),
+    };
+    let value: PunctuatedStrings = Potential::from(text)
+        .actualize(&mut Budget {
+            remaining: 16,
+            reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 16,
+        })
+        .unwrap();
+    assert_eq!(value, expected);
+    assert_eq!(value.datomize(vec![]).protosize().textualize(), text);
+}
+
+#[test]
+fn typed_enums_keep_bare_carried_and_daisy_variants() {
+    for (text, expected) in [
+        (
+            "Reply.Accepted.{ 42 today }",
+            Message::Reply(Reply::Accepted(42, "today".into())),
+        ),
+        ("Reply.Pending", Message::Reply(Reply::Pending)),
+    ] {
+        let value: Message = Potential::from(text)
+            .actualize(&mut Budget {
+                remaining: 16,
+                reader: ReaderBudget { remaining: 128 },
+                depth: 0,
+                maximum_depth: 16,
+            })
+            .unwrap();
+        assert_eq!(value, expected);
+        assert_eq!(value.datomize(vec![]).protosize().textualize(), text);
+    }
+}
+
+#[test]
+fn delimited_variant_shapes_do_not_compose_as_strings() {
+    let error = Potential::<String>::from("Head.{ x }")
+        .actualize(&mut Budget {
+            remaining: 8,
+            reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 8,
+        })
+        .unwrap_err();
+    assert!(matches!(
+        error.kind,
+        ErrorKind::Form { ref expected, .. } if expected == "String"
+    ));
+}
+
+#[test]
+fn dotted_string_composition_obeys_depth_and_work_budgets() {
+    let dotted = Datom {
+        path: vec![],
+        form: Form::Variant(
+            protos::Symbol("One".into()),
+            Box::new(Datom {
+                path: vec![1],
+                form: Form::Variant(
+                    protos::Symbol("Two".into()),
+                    Box::new(Datom {
+                        path: vec![1, 1],
+                        form: Form::Variant(
+                            protos::Symbol("Three".into()),
+                            Box::new(Datom {
+                                path: vec![1, 1, 1],
+                                form: Form::Bare("Four".into()),
+                            }),
+                        ),
+                    }),
+                ),
+            }),
+        ),
+    };
+    let mut depth_budget = Budget {
+        remaining: 16,
+        reader: ReaderBudget { remaining: 16 },
+        depth: 0,
+        maximum_depth: 3,
+    };
+    let error = dotted.compose::<String>(&mut depth_budget).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Budget);
+    assert_eq!(depth_budget.depth, 0);
+
+    let mut work_budget = Budget {
+        remaining: 2,
+        reader: ReaderBudget { remaining: 16 },
+        depth: 0,
+        maximum_depth: 16,
+    };
+    let error = dotted.compose::<String>(&mut work_budget).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Budget);
+    assert_eq!(work_budget.depth, 0);
+}
+
+#[test]
 fn generic_containers_and_meaning_round_trip_their_forms() {
     let value = Wrapper {
         value: Some(Box::new(Meaning("nested (meaning)".into()))),
@@ -436,8 +551,8 @@ fn datom_refuses_non_datom_structural_forms() {
 }
 
 #[test]
-fn strings_quote_syntax_and_accept_temporary_meaning_text() {
-    for value in ["a{b", "a;b", "a.b", "a(b", "a!b"] {
+fn strings_quote_delimiters_keep_bare_separators_and_accept_temporary_meaning_text() {
+    for value in ["a{b", "a;b", "a(b"] {
         let text = value.to_owned().datomize(vec![]).protosize().textualize();
         assert!(text.starts_with('«'), "{value}: {text}");
         assert_eq!(
@@ -447,6 +562,21 @@ fn strings_quote_syntax_and_accept_temporary_meaning_text() {
                     reader: ReaderBudget { remaining: 128 },
                     depth: 0,
                     maximum_depth: 4_096
+                })
+                .unwrap(),
+            value
+        );
+    }
+    for value in ["a.b", "a!b", "a:b"] {
+        let text = value.to_owned().datomize(vec![]).protosize().textualize();
+        assert_eq!(text, value);
+        assert_eq!(
+            Potential::<String>::from(text)
+                .actualize(&mut Budget {
+                    remaining: 8,
+                    reader: ReaderBudget { remaining: 128 },
+                    depth: 0,
+                    maximum_depth: 8,
                 })
                 .unwrap(),
             value
