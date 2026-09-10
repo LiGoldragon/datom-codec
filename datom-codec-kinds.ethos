@@ -1,6 +1,6 @@
 ; Datom's public conversion and reader kinds.
 Library
-[ crate:[ Datom Budget Error Form Positions Potential ] ]
+[ crate:[ Datom Budget Error Form Path Positions Potential ] ]
 []
 [ DatomForming.[ datom_form.{ [ Path ] [ Result<Datom Error> ] } ]
   Datomizable.{ [] [ Output ] [] [ datomize.{ [ Path ] [ Output ] } ] }

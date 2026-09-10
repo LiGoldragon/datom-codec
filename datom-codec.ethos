@@ -1,6 +1,6 @@
 ; Datom's public conceptual data anatomy.
 Library
-[ protos:[ Error Extent Protos ReaderBudget Separator Symbol ]
+[ protos:[ Extent Protos ReaderBudget Separator Symbol ]
   crate:[ Datom Form Budget ErrorLayer Error ErrorKind ] ]
 [ Path.Vector<Integer>
   Opaque.String
