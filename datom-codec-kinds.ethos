@@ -1,4 +1,6 @@
-; Datom's public conversion and reader kinds.
+; Datom's representable public conversion kinds. Borrowed reader handles and
+; operational helper kinds remain Rust implementation surface until Ethos has
+; declarations for their references and unit-yield capabilities.
 Library
 [ crate:[ Datom Budget Error Form Path Positions Potential ] ]
 []

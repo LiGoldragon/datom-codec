@@ -1,9 +1,12 @@
-; Datom's public conceptual data anatomy.
+; Datom's public conceptual data anatomy. This declaration covers the
+; serializable conceptual surface, not every operational or borrowed Rust
+; helper. Meaning is represented as its one opaque String position; Rust's
+; tuple wrapper is not a distinct Ethos declaration form.
 Library
-[ protos:[ Extent Protos ReaderBudget Separator Symbol ]
-  crate:[ Datom Form Budget ErrorLayer Error ErrorKind ] ]
+[ protos:[ Extent Protos ReaderBudget Separator Symbol ] ]
 [ Path.Vector<Integer>
   Opaque.String
+  Meaning.String
   Datom.{ Path Form }
   Form.[ Struct.Vector<Datom>
          Vector.Vector<Datom>
