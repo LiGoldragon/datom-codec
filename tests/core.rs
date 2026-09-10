@@ -337,6 +337,42 @@ fn typed_string_positions_resolve_bare_syntax_characters() {
 }
 
 #[test]
+fn string_rule_round_trips_bare_punctuation_and_delimited_content() {
+    for (value, canonical) in [
+        (".a", ".a"),
+        ("a.", "a."),
+        ("a..b", "a..b"),
+        (".codex/agents/worker.toml", ".codex/agents/worker.toml"),
+        ("lower.case", "lower.case"),
+        ("Upper.Case", "Upper.Case"),
+        ("a:b:c", "a:b:c"),
+        ("a!b!c", "a!b!c"),
+        ("https://example.org/a", "https://example.org/a"),
+        ("猫.龍", "猫.龍"),
+        ("path\\segment", "path\\segment"),
+        ("", "«»"),
+        ("two words", "«two words»"),
+        (";comment", "«;comment»"),
+        ("a;b", "«a;b»"),
+        ("{x}", "«{x}»"),
+        ("(x)", "«(x)»"),
+        ("«x»", "««x\\»»"),
+    ] {
+        let text = value.to_owned().datomize(vec![]).protosize().textualize();
+        assert_eq!(text, canonical, "canonical String for {value:?}");
+        let rebuilt: String = Potential::from(text)
+            .actualize(&mut Budget {
+                remaining: 64,
+                reader: ReaderBudget { remaining: 256 },
+                depth: 0,
+                maximum_depth: 64,
+            })
+            .unwrap();
+        assert_eq!(rebuilt, value, "String round trip for {canonical:?}");
+    }
+}
+
+#[test]
 fn typed_enums_keep_bare_carried_and_daisy_variants() {
     for (text, expected) in [
         (
