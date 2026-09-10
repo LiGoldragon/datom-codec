@@ -67,6 +67,25 @@ fn derived_struct_composes_its_typed_positions() {
 }
 
 #[test]
+fn protos_symbol_and_reader_budget_are_datom_intrinsics() {
+    let mut budget = Budget {
+        remaining: 20,
+        reader: ReaderBudget { remaining: 128 },
+        depth: 0,
+        maximum_depth: 128,
+    };
+    let symbol = protos::Symbol("Reviewer".into());
+    let datom = symbol.datomize(vec![]);
+    let rebuilt: protos::Symbol = datom.compose(&mut budget.clone()).unwrap();
+    assert_eq!(rebuilt, symbol);
+
+    let reader = ReaderBudget { remaining: 4_096 };
+    let datom = reader.datomize(vec![]);
+    let rebuilt: ReaderBudget = datom.compose(&mut budget).unwrap();
+    assert_eq!(rebuilt, reader);
+}
+
+#[test]
 fn scalar_refusal_keeps_the_datom_path() {
     let datom = Datom {
         path: vec![2],

@@ -548,6 +548,48 @@ impl Compositional for protos::Separator {
     }
 }
 
+impl Datomizable for protos::Symbol {
+    type Output = Datom;
+    fn datomize(&self, at: Path) -> Datom {
+        self.0.datomize(at)
+    }
+}
+impl Compositional for protos::Symbol {
+    const ARITY: Integer = 1;
+    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
+        unreachable!()
+    }
+    fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
+        Ok(Self(String::compose(datom, budget)?))
+    }
+}
+
+impl Datomizable for protos::ReaderBudget {
+    type Output = Datom;
+    fn datomize(&self, at: Path) -> Datom {
+        (self.remaining as Integer).datomize(at)
+    }
+}
+impl Compositional for protos::ReaderBudget {
+    const ARITY: Integer = 1;
+    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
+        unreachable!()
+    }
+    fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
+        let remaining: Integer = datom.compose(budget)?;
+        Ok(Self {
+            remaining: remaining.try_into().map_err(|_| Error {
+                layer: ErrorLayer::Composition,
+                path: datom.path.clone(),
+                kind: ErrorKind::Value {
+                    expected: "non-negative reader budget".into(),
+                    value: remaining.to_string(),
+                },
+            })?,
+        })
+    }
+}
+
 impl Datomizable for protos::Problem {
     type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
