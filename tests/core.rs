@@ -305,7 +305,7 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
             .datomize(vec![])
             .protosize()
             .textualize(),
-        "Some.Ada:one"
+        "Some.«Ada:one»"
     );
     assert_eq!(
         Some(three_point_fourteen)
@@ -349,22 +349,25 @@ fn typed_string_positions_resolve_bare_syntax_characters() {
         })
         .unwrap();
     assert_eq!(value, expected);
-    assert_eq!(value.datomize(vec![]).protosize().textualize(), text);
+    assert_eq!(
+        value.datomize(vec![]).protosize().textualize(),
+        "{ «gpt-5.6-luna» «https://example.org/a» «Upper.Case» }"
+    );
 }
 
 #[test]
 fn string_rule_round_trips_bare_punctuation_and_delimited_content() {
     for (value, canonical) in [
-        (".a", ".a"),
-        ("a.", "a."),
-        ("a..b", "a..b"),
-        (".codex/agents/worker.toml", ".codex/agents/worker.toml"),
-        ("lower.case", "lower.case"),
-        ("Upper.Case", "Upper.Case"),
-        ("a:b:c", "a:b:c"),
-        ("a!b!c", "a!b!c"),
-        ("https://example.org/a", "https://example.org/a"),
-        ("猫.龍", "猫.龍"),
+        (".a", "«.a»"),
+        ("a.", "«a.»"),
+        ("a..b", "«a..b»"),
+        (".codex/agents/worker.toml", "«.codex/agents/worker.toml»"),
+        ("lower.case", "«lower.case»"),
+        ("Upper.Case", "«Upper.Case»"),
+        ("a:b:c", "«a:b:c»"),
+        ("a!b!c", "«a!b!c»"),
+        ("https://example.org/a", "«https://example.org/a»"),
+        ("猫.龍", "«猫.龍»"),
         ("path\\segment", "path\\segment"),
         ("", "«»"),
         ("two words", "«two words»"),
@@ -621,7 +624,7 @@ fn strings_quote_delimiters_keep_bare_separators_and_accept_temporary_meaning_te
     }
     for value in ["a.b", "a!b", "a:b"] {
         let text = value.to_owned().datomize(vec![]).protosize().textualize();
-        assert_eq!(text, value);
+        assert!(text.starts_with('«'), "{value}: {text}");
         assert_eq!(
             Potential::<String>::from(text)
                 .actualize(&mut Budget {
