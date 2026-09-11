@@ -317,6 +317,22 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
 }
 
 #[test]
+fn option_string_with_protos_separators_round_trips() {
+    let value = Some("5::7/128".to_owned());
+    let rendered = value.datomize(vec![]).protosize().textualize();
+    assert_eq!(rendered, "Some.«5::7/128»");
+    let decoded: Option<String> = Potential::from(rendered.as_str())
+        .actualize(&mut Budget {
+            remaining: 2,
+            reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
+        })
+        .expect("quoted separator string decodes");
+    assert_eq!(decoded, value);
+}
+
+#[test]
 fn typed_string_positions_resolve_bare_syntax_characters() {
     let text = "{ gpt-5.6-luna https://example.org/a Upper.Case }";
     let expected = PunctuatedStrings {

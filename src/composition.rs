@@ -184,6 +184,7 @@ impl Datomizable for String {
                     || matches!(
                         character,
                         '{' | '}' | '[' | ']' | '<' | '>' | '«' | '»' | '(' | ')' | ';'
+                            | '.' | '!' | ':'
                     )
             }) {
             Form::String(self.clone())
