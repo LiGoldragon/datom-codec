@@ -1,6 +1,6 @@
 [package]
 name        = "datom-codec"
-version     = "0.26.2"
+version     = "0.26.3"
 edition     = "2024"
 rust-version = "1.85"
 license     = "MIT OR Apache-2.0"
@@ -12,7 +12,7 @@ publish     = false
 members = ["crates/datom-codec-derive"]
 
 [dependencies]
-protos = { git = "https://github.com/LiGoldragon/protos", rev = "e8701521a37c698d6a2eb933618b9d5d1c6f6ffb" }
+protos = { git = "https://github.com/LiGoldragon/protos", rev = "171b21f65337983ab624b7b906397a4f1f92c5a3" }
 derive = { package = "datom-codec-derive", path = "crates/datom-codec-derive" }
 
 [dev-dependencies]
