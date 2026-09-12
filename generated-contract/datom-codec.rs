@@ -32,7 +32,5 @@ pub trait Datomizable {
     type Output;
     fn datomize(&self, input: Path) -> Self::Output;
 }
-pub trait Compositional {
-    type ARITY;
-}
+pub trait Compositional {}
 pub trait Composable {}

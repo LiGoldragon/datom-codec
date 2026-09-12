@@ -283,7 +283,7 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
     assert_eq!(integer, Some(42));
     let decimal: f64 = Potential::from("3.14")
         .actualize(&mut Budget {
-            remaining: 1,
+            remaining: 2,
             reader: ReaderBudget { remaining: 128 },
             depth: 0,
             maximum_depth: 4_096,
@@ -292,7 +292,7 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
     assert_eq!(decimal, three_point_fourteen);
     let optional_decimal: Option<f64> = Potential::from("Some.3.14")
         .actualize(&mut Budget {
-            remaining: 2,
+            remaining: 3,
             reader: ReaderBudget { remaining: 128 },
             depth: 0,
             maximum_depth: 4_096,
@@ -305,7 +305,7 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
             .datomize(vec![])
             .protosize()
             .textualize(),
-        "Some.«Ada:one»"
+        "Some.Ada:one"
     );
     assert_eq!(
         Some(three_point_fourteen)
@@ -328,7 +328,7 @@ fn option_string_with_protos_separators_round_trips() {
             depth: 0,
             maximum_depth: 4_096,
         })
-        .expect("quoted separator string decodes");
+        .expect("delimited separator string decodes");
     assert_eq!(decoded, value);
 }
 
@@ -349,10 +349,7 @@ fn typed_string_positions_resolve_bare_syntax_characters() {
         })
         .unwrap();
     assert_eq!(value, expected);
-    assert_eq!(
-        value.datomize(vec![]).protosize().textualize(),
-        "{ «gpt-5.6-luna» «https://example.org/a» «Upper.Case» }"
-    );
+    assert_eq!(value.datomize(vec![]).protosize().textualize(), text);
 }
 
 #[test]
@@ -362,12 +359,12 @@ fn string_rule_round_trips_bare_punctuation_and_delimited_content() {
         ("a.", "«a.»"),
         ("a..b", "«a..b»"),
         (".codex/agents/worker.toml", "«.codex/agents/worker.toml»"),
-        ("lower.case", "«lower.case»"),
-        ("Upper.Case", "«Upper.Case»"),
-        ("a:b:c", "«a:b:c»"),
-        ("a!b!c", "«a!b!c»"),
-        ("https://example.org/a", "«https://example.org/a»"),
-        ("猫.龍", "«猫.龍»"),
+        ("lower.case", "lower.case"),
+        ("Upper.Case", "Upper.Case"),
+        ("a:b:c", "a:b:c"),
+        ("a!b!c", "a!b!c"),
+        ("https://example.org/a", "https://example.org/a"),
+        ("猫.龍", "猫.龍"),
         ("path\\segment", "path\\segment"),
         ("", "«»"),
         ("two words", "«two words»"),
@@ -606,7 +603,7 @@ fn datom_refuses_non_datom_structural_forms() {
 }
 
 #[test]
-fn strings_quote_delimiters_keep_bare_separators_and_accept_temporary_meaning_text() {
+fn strings_quote_delimiters_keep_bare_separators_and_refuse_meaning_text() {
     for value in ["a{b", "a;b", "a(b"] {
         let text = value.to_owned().datomize(vec![]).protosize().textualize();
         assert!(text.starts_with('«'), "{value}: {text}");
@@ -624,7 +621,7 @@ fn strings_quote_delimiters_keep_bare_separators_and_accept_temporary_meaning_te
     }
     for value in ["a.b", "a!b", "a:b"] {
         let text = value.to_owned().datomize(vec![]).protosize().textualize();
-        assert!(text.starts_with('«'), "{value}: {text}");
+        assert_eq!(text, value);
         assert_eq!(
             Potential::<String>::from(text)
                 .actualize(&mut Budget {
@@ -637,16 +634,20 @@ fn strings_quote_delimiters_keep_bare_separators_and_accept_temporary_meaning_te
             value
         );
     }
+    let error = Potential::<String>::from("(a meaning)")
+        .actualize(&mut Budget {
+            remaining: 1,
+            reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
+        })
+        .unwrap_err();
     assert_eq!(
-        Potential::<String>::from("(temporary meaning)")
-            .actualize(&mut Budget {
-                remaining: 1,
-                reader: ReaderBudget { remaining: 128 },
-                depth: 0,
-                maximum_depth: 4_096
-            })
-            .unwrap(),
-        "temporary meaning"
+        error.kind,
+        ErrorKind::Form {
+            expected: "String".into(),
+            found: "Meaning".into()
+        }
     );
 }
 
@@ -801,10 +802,6 @@ fn composition_depth_is_bounded_independently_from_node_budget() {
 #[derive(Debug, PartialEq)]
 struct Recursive(usize);
 impl Compositional for Recursive {
-    const ARITY: i64 = 0;
-    fn from_positions(_: datom_codec::Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!()
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         use datom_codec::{Composable, Variantizing};
         if matches!(&datom.form, Form::Bare(name) if name == "Pending") {

@@ -1,40 +1,32 @@
-#![allow(dead_code)]
-pub trait Datomic: Sized + protos::Conceivable<
-        crate::Datom,
-    > + protos::Textualizable<crate::Datom> {
-    fn incorporate(input: crate::Site) -> Result<Self, crate::Fault>;
-}
-pub trait Worded: Sized {
-    const EXPECTED: crate::Expected;
-    fn to_word(&self) -> std::string::String;
-    fn incorporate_word(input: crate::Site) -> Result<Self, crate::Fault>;
-    fn conceive_word(&self) -> crate::Datom;
-}
-pub trait Sited {
-    fn positions(
+#![allow(dead_code, non_camel_case_types, non_snake_case)]
+pub trait DatomForming {
+    fn datom_form(
         &self,
-        input: protos::Integer,
-    ) -> Result<crate::Positions, crate::Fault>;
-    fn elements(&self) -> Result<crate::Positions, crate::Fault>;
-    fn variant(&self) -> Result<crate::Variant, crate::Fault>;
-    fn text(&self) -> Result<protos::Text, crate::Fault>;
-    fn found(&self) -> crate::Found;
-    fn refuse(&self, input: crate::Problem) -> crate::Fault;
+        input: crate::Path,
+    ) -> std::result::Result<crate::Datom, crate::Error>;
 }
-pub trait Positional<A: Datomic> {
-    fn position(&mut self) -> Result<A, crate::Fault>;
+pub trait Datomizable {
+    type Output;
+    fn datomize(&self, input: crate::Path) -> Self::Output;
 }
-pub trait Counted {
-    fn remaining(&self) -> protos::Integer;
+pub trait Compositional {
+    fn compose(
+        input_0: crate::Datom,
+        input_1: crate::Budget,
+    ) -> std::result::Result<Self, crate::Error>
+    where
+        Self: Sized;
 }
-pub trait Carrying<A: Datomic> {
-    fn body(&self) -> Result<A, crate::Fault>;
+pub trait Composable {
+    fn compose(&self, input: crate::Budget) -> std::result::Result<Self, crate::Error>
+    where
+        Self: Sized;
 }
-pub trait Headed: Sized {
-    fn positions(
-        &self,
-        input: protos::Integer,
-    ) -> Result<crate::Positions, crate::Fault>;
-    fn nothing(&self) -> Result<Self, crate::Fault>;
-    fn reject(&self, input: crate::Problem) -> crate::Fault;
+pub trait Actualizing {
+    fn actualize(
+        &mut self,
+        input: crate::Budget,
+    ) -> std::result::Result<Self, crate::Error>
+    where
+        Self: Sized;
 }

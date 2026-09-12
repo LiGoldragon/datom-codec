@@ -127,12 +127,7 @@ pub trait Composable {
     fn compose<T: Compositional>(&self, budget: &mut Budget) -> Result<T, Error>;
 }
 pub trait Compositional: Sized {
-    const ARITY: Integer;
-    fn from_positions(positions: Positions<'_>, budget: &mut Budget) -> Result<Self, Error>;
-    fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
-        budget.spend(&datom.path)?;
-        Self::from_positions(datom.positions("Struct")?, budget)
-    }
+    fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error>;
 }
 pub trait Datomizable {
     type Output;
@@ -156,7 +151,6 @@ pub struct Positions<'a> {
 }
 pub trait Positioning {
     fn position<T: Compositional>(&mut self, budget: &mut Budget) -> Result<T, Error>;
-    fn finish(self) -> Result<(), Error>;
 }
 impl Positioning for Positions<'_> {
     fn position<T: Compositional>(&mut self, budget: &mut Budget) -> Result<T, Error> {
@@ -165,25 +159,11 @@ impl Positioning for Positions<'_> {
             path: self.path.clone(),
             kind: ErrorKind::Arity {
                 expected: self.next as Integer + 1,
-                found: self.next as Integer,
+                found: self.children.len() as Integer,
             },
         })?;
         self.next += 1;
         child.compose(budget)
-    }
-    fn finish(self) -> Result<(), Error> {
-        if self.next == self.children.len() {
-            Ok(())
-        } else {
-            Err(Error {
-                layer: ErrorLayer::Composition,
-                path: self.path.clone(),
-                kind: ErrorKind::Arity {
-                    expected: self.next as Integer,
-                    found: self.children.len() as Integer,
-                },
-            })
-        }
     }
 }
 
@@ -203,11 +183,10 @@ impl Naming for Form {
     }
 }
 pub trait DatomPositioning {
-    fn positions(&self, expected: &'static str) -> Result<Positions<'_>, Error>;
-    fn variant_positions(&self) -> Result<Positions<'_>, Error>;
+    fn positions(&self, arity: Integer) -> Result<Positions<'_>, Error>;
 }
 impl DatomPositioning for Datom {
-    fn positions(&self, expected: &'static str) -> Result<Positions<'_>, Error> {
+    fn positions(&self, arity: Integer) -> Result<Positions<'_>, Error> {
         let children = match &self.form {
             Form::Struct(children) => children,
             found => {
@@ -215,20 +194,27 @@ impl DatomPositioning for Datom {
                     layer: ErrorLayer::Composition,
                     path: self.path.clone(),
                     kind: ErrorKind::Form {
-                        expected: expected.to_owned(),
+                        expected: "Struct".to_owned(),
                         found: found.form_name().to_owned(),
                     },
                 });
             }
         };
+        if children.len() as Integer != arity {
+            return Err(Error {
+                layer: ErrorLayer::Composition,
+                path: self.path.clone(),
+                kind: ErrorKind::Arity {
+                    expected: arity,
+                    found: children.len() as Integer,
+                },
+            });
+        }
         Ok(Positions {
             path: &self.path,
             children,
             next: 0,
         })
-    }
-    fn variant_positions(&self) -> Result<Positions<'_>, Error> {
-        self.positions("Struct")
     }
 }
 impl Composable for Datom {
@@ -255,10 +241,6 @@ impl Datomizable for ErrorLayer {
     }
 }
 impl Compositional for ErrorLayer {
-    const ARITY: Integer = 0;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!()
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         budget.spend(&datom.path)?;
         match &datom.form {
@@ -294,7 +276,7 @@ impl Datomizable for ErrorKind {
             },
             Self::Structural(error) => error.datomize(at.child(1)).named_variant(at, "Structural"),
             Self::Form { expected, found } => Datom {
-                path: at.clone(),
+                path: at.child(1),
                 form: Form::Struct(vec![
                     expected.datomize(at.child(1).child(0)),
                     found.datomize(at.child(1).child(1)),
@@ -302,7 +284,7 @@ impl Datomizable for ErrorKind {
             }
             .named_variant(at, "Form"),
             Self::Arity { expected, found } => Datom {
-                path: at.clone(),
+                path: at.child(1),
                 form: Form::Struct(vec![
                     expected.datomize(at.child(1).child(0)),
                     found.datomize(at.child(1).child(1)),
@@ -310,7 +292,7 @@ impl Datomizable for ErrorKind {
             }
             .named_variant(at, "Arity"),
             Self::Value { expected, value } => Datom {
-                path: at.clone(),
+                path: at.child(1),
                 form: Form::Struct(vec![
                     expected.datomize(at.child(1).child(0)),
                     value.datomize(at.child(1).child(1)),
@@ -318,7 +300,7 @@ impl Datomizable for ErrorKind {
             }
             .named_variant(at, "Value"),
             Self::Variant { expected, found } => Datom {
-                path: at.clone(),
+                path: at.child(1),
                 form: Form::Struct(vec![
                     expected.datomize(at.child(1).child(0)),
                     found.datomize(at.child(1).child(1)),
@@ -329,54 +311,48 @@ impl Datomizable for ErrorKind {
     }
 }
 impl Compositional for ErrorKind {
-    const ARITY: Integer = 1;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!()
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         if matches!(&datom.form, Form::Bare(name) if name == "Budget") {
             budget.spend(&datom.path)?;
             return Ok(Self::Budget);
         }
         let (head, body) = datom.variant(budget, "ErrorKind")?;
-        let mut positions = body.positions("Struct")?;
-        let value = match head {
-            "Structural" => Self::Structural(positions.position(budget)?),
-            "Form" => Self::Form {
+        if head == "Structural" {
+            return Ok(Self::Structural(body.compose(budget)?));
+        }
+        let mut positions = body.positions(2)?;
+        match head {
+            "Form" => Ok(Self::Form {
                 expected: positions.position(budget)?,
                 found: positions.position(budget)?,
-            },
-            "Arity" => Self::Arity {
+            }),
+            "Arity" => Ok(Self::Arity {
                 expected: positions.position(budget)?,
                 found: positions.position(budget)?,
-            },
-            "Value" => Self::Value {
+            }),
+            "Value" => Ok(Self::Value {
                 expected: positions.position(budget)?,
                 value: positions.position(budget)?,
-            },
-            "Variant" => Self::Variant {
+            }),
+            "Variant" => Ok(Self::Variant {
                 expected: positions.position(budget)?,
                 found: positions.position(budget)?,
-            },
-            found => {
-                return Err(Error::composition(
-                    datom.path.clone(),
-                    ErrorKind::Variant {
-                        expected: "ErrorKind".into(),
-                        found: found.to_owned(),
-                    },
-                ));
-            }
-        };
-        positions.finish()?;
-        Ok(value)
+            }),
+            found => Err(Error::composition(
+                datom.path.clone(),
+                ErrorKind::Variant {
+                    expected: "ErrorKind".into(),
+                    found: found.to_owned(),
+                },
+            )),
+        }
     }
 }
 impl Datomizable for Error {
     type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         Datom {
-            path: at.clone(),
+            path: at.child(1),
             form: Form::Struct(vec![
                 self.layer.datomize(at.child(1).child(0)),
                 self.path.datomize(at.child(1).child(1)),
@@ -387,10 +363,6 @@ impl Datomizable for Error {
     }
 }
 impl Compositional for Error {
-    const ARITY: Integer = 3;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!()
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         let (head, body) = datom.variant(budget, "Error")?;
         if head != "Error" {
@@ -402,12 +374,12 @@ impl Compositional for Error {
                 },
             ));
         }
-        let mut positions = body.positions("Struct")?;
-        let layer = positions.position(budget)?;
-        let path = positions.position(budget)?;
-        let kind = positions.position(budget)?;
-        positions.finish()?;
-        Ok(Self { layer, path, kind })
+        let mut positions = body.positions(3)?;
+        Ok(Self {
+            layer: positions.position(budget)?,
+            path: positions.position(budget)?,
+            kind: positions.position(budget)?,
+        })
     }
 }
 

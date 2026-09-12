@@ -6,7 +6,7 @@ Library
 []
 [ DatomForming.[ datom_form.{ [ Path ] [ Result<Datom Error> ] } ]
   Datomizable.{ [] [ Output ] [] [ datomize.{ [ Path ] [ Output ] } ] }
-  Compositional.{ [] [ ARITY ] [] [ from_positions:{ [ Positions Budget ] [ Result<Self Error> ] } ] }
+  Compositional.[ compose:{ [ Datom Budget ] [ Result<Self Error> ] } ]
   Composable.[ compose.{ [ Budget ] [ Result<Self Error> ] } ]
   Actualizing.[ actualize!{ [ Budget ] [ Result<Self Error> ] } ] ]
 []

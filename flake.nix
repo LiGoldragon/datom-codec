@@ -63,6 +63,11 @@
             declaration = ./datom-codec.ethos;
             committed = ./generated-contract/datom-codec.rs;
           } (builtins.readFile ./checks/generated-contract.sh);
+          generated-kinds-contract = pkgs.runCommand "datom-codec-generated-kinds-contract" {
+            generator = ethos-zero.packages.${system}.default;
+            declaration = ./datom-codec-kinds.ethos;
+            committed = ./generated-contract/datom-codec-kinds.rs;
+          } (builtins.readFile ./checks/generated-contract.sh);
           doc = craneLib.cargoDoc (commonArguments // {
             inherit cargoArtifacts;
             RUSTDOCFLAGS = "-D warnings";

@@ -20,6 +20,6 @@ Library
   Budget.{ Integer ReaderBudget Integer Integer }
   ]
 [ Datomizable.{ [] [ Output ] [] [ datomize.{ [ Path ] [ Output ] } ] }
-  Compositional.{ [] [ ARITY ] [] [] }
+  Compositional.[]
   Composable.[] ]
 []

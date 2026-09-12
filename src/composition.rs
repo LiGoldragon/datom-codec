@@ -146,16 +146,10 @@ impl<'a> FormingDatoms<'a> for Former<'a> {
                 }
                 Forming::Headed(path, head) => {
                     let body = former.values.pop().expect("formed headed body");
-                    let form = match &body.form {
-                        Form::Bare(text)
-                            if head.0.parse::<i64>().is_ok()
-                                && text.chars().all(|character| character.is_ascii_digit()) =>
-                        {
-                            Form::Bare(format!("{}.{}", head.0, text))
-                        }
-                        _ => Form::Variant(head, Box::new(body)),
-                    };
-                    former.values.push(Datom { path, form });
+                    former.values.push(Datom {
+                        path,
+                        form: Form::Variant(head, Box::new(body)),
+                    });
                 }
             }
         }
@@ -178,15 +172,22 @@ impl Datomizable for protos::Protos {
 impl Datomizable for String {
     type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
-        let form = if self.is_empty()
+        let separator = |character: char| matches!(character, '.' | '!' | ':');
+        let delimited = self.is_empty()
             || self.chars().any(|character| {
                 character.is_whitespace()
                     || matches!(
                         character,
                         '{' | '}' | '[' | ']' | '<' | '>' | '«' | '»' | '(' | ')' | ';'
-                            | '.' | '!' | ':'
                     )
-            }) {
+            })
+            || self.starts_with(separator)
+            || self.ends_with(separator)
+            || self
+                .chars()
+                .zip(self.chars().skip(1))
+                .any(|(left, right)| separator(left) && separator(right));
+        let form = if delimited {
             Form::String(self.clone())
         } else {
             Form::Bare(self.clone())
@@ -195,10 +196,6 @@ impl Datomizable for String {
     }
 }
 impl Compositional for String {
-    const ARITY: Integer = 0;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!("strings compose from a scalar form")
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         datom.compose_bare_string(budget)
     }
@@ -216,7 +213,7 @@ impl BareStringComposing for Datom {
         loop {
             budget.spend(&current.path)?;
             let text = match &current.form {
-                Form::Bare(text) | Form::String(text) | Form::Meaning(text) if value.is_empty() => {
+                Form::Bare(text) | Form::String(text) if value.is_empty() => {
                     return Ok(text.clone());
                 }
                 Form::Bare(text) => text,
@@ -289,10 +286,6 @@ impl Datomizable for i64 {
     }
 }
 impl Compositional for i64 {
-    const ARITY: Integer = 0;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!("integers compose from a bare form")
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         Self::scalar(datom, budget)
     }
@@ -300,9 +293,8 @@ impl Compositional for i64 {
 impl Datomizable for f64 {
     type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
-        assert!(self.is_finite(), "Datom decimals are finite");
         let mut text = self.to_string();
-        if !text.contains('.') {
+        if self.is_finite() && !text.contains('.') {
             text.push_str(".0");
         }
         Datom {
@@ -312,10 +304,6 @@ impl Datomizable for f64 {
     }
 }
 impl Compositional for f64 {
-    const ARITY: Integer = 0;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!("decimals compose from a bare form")
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         Self::scalar(datom, budget)
     }
@@ -330,10 +318,6 @@ impl Datomizable for bool {
     }
 }
 impl Compositional for bool {
-    const ARITY: Integer = 0;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!("booleans compose from a bare form")
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         Self::scalar(datom, budget)
     }
@@ -354,10 +338,6 @@ impl<T: Datomizable<Output = Datom>> Datomizable for Vec<T> {
     }
 }
 impl<T: Compositional> Compositional for Vec<T> {
-    const ARITY: Integer = -1;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!("vectors compose from a vector form")
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         budget.spend(&datom.path)?;
         let children = match &datom.form {
@@ -389,10 +369,6 @@ impl Datomizable for Meaning {
     }
 }
 impl Compositional for Meaning {
-    const ARITY: Integer = 0;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!("meaning composes from a meaning form")
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         budget.spend(&datom.path)?;
         match &datom.form {
@@ -416,10 +392,6 @@ impl<T: Datomizable<Output = Datom>> Datomizable for Box<T> {
     }
 }
 impl<T: Compositional> Compositional for Box<T> {
-    const ARITY: Integer = T::ARITY;
-    fn from_positions(positions: Positions<'_>, budget: &mut Budget) -> Result<Self, Error> {
-        Ok(Box::new(T::from_positions(positions, budget)?))
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         Ok(Box::new(datom.compose(budget)?))
     }
@@ -471,10 +443,6 @@ impl<T: Datomizable<Output = Datom>> Datomizable for Option<T> {
     }
 }
 impl<T: Compositional> Compositional for Option<T> {
-    const ARITY: Integer = 1;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!("options compose from a variant form")
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         if matches!(&datom.form, Form::Bare(head) if head == "None") {
             budget.spend(&datom.path)?;
@@ -483,7 +451,6 @@ impl<T: Compositional> Compositional for Option<T> {
         let (head, body) = datom.variant(budget, "Variant")?;
         match head {
             "Some" => Ok(Some(body.compose(budget)?)),
-            "None" if matches!(body.form, Form::Bare(ref value) if value.is_empty()) => Ok(None),
             found => Err(Error {
                 layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
@@ -505,10 +472,6 @@ impl<T: Datomizable<Output = Datom>, E: Datomizable<Output = Datom>> Datomizable
     }
 }
 impl<T: Compositional, E: Compositional> Compositional for Result<T, E> {
-    const ARITY: Integer = 1;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!("results compose from a variant form")
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         let (head, body) = datom.variant(budget, "Variant")?;
         match head {
@@ -530,21 +493,31 @@ impl Datomizable for protos::Extent {
     type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         Datom {
-            path: at.clone(),
+            path: at.child(1),
             form: Form::Struct(vec![
-                (self.start as i64).datomize(at.child(0)),
-                (self.end as i64).datomize(at.child(1)),
+                (self.start as i64).datomize(at.child(1).child(0)),
+                (self.end as i64).datomize(at.child(1).child(1)),
             ]),
         }
         .named_variant(at, "Extent")
     }
 }
 impl Compositional for protos::Extent {
-    const ARITY: Integer = 2;
-    fn from_positions(mut positions: Positions<'_>, budget: &mut Budget) -> Result<Self, Error> {
+    fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
+        let (head, body) = datom.variant(budget, "Extent")?;
+        if head != "Extent" {
+            return Err(Error {
+                layer: ErrorLayer::Composition,
+                path: datom.path.clone(),
+                kind: ErrorKind::Variant {
+                    expected: "Extent".into(),
+                    found: head.to_owned(),
+                },
+            });
+        }
+        let mut positions = body.positions(2)?;
         let start: i64 = positions.position(budget)?;
         let end: i64 = positions.position(budget)?;
-        positions.finish()?;
         Ok(Self {
             start: start.try_into().map_err(|_| Error {
                 layer: ErrorLayer::Composition,
@@ -564,20 +537,6 @@ impl Compositional for protos::Extent {
             })?,
         })
     }
-    fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
-        let (head, body) = datom.variant(budget, "Extent")?;
-        if head != "Extent" {
-            return Err(Error {
-                layer: ErrorLayer::Composition,
-                path: datom.path.clone(),
-                kind: ErrorKind::Variant {
-                    expected: "Extent".into(),
-                    found: head.to_owned(),
-                },
-            });
-        }
-        Self::from_positions(body.positions("Struct")?, budget)
-    }
 }
 
 impl Datomizable for protos::Separator {
@@ -595,10 +554,6 @@ impl Datomizable for protos::Separator {
     }
 }
 impl Compositional for protos::Separator {
-    const ARITY: Integer = 0;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!()
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         budget.spend(&datom.path)?;
         match &datom.form {
@@ -632,10 +587,6 @@ impl Datomizable for protos::Symbol {
     }
 }
 impl Compositional for protos::Symbol {
-    const ARITY: Integer = 1;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!()
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         Ok(Self(String::compose(datom, budget)?))
     }
@@ -648,10 +599,6 @@ impl Datomizable for protos::ReaderBudget {
     }
 }
 impl Compositional for protos::ReaderBudget {
-    const ARITY: Integer = 1;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!()
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         let remaining: Integer = datom.compose(budget)?;
         Ok(Self {
@@ -703,10 +650,6 @@ impl Datomizable for protos::Problem {
     }
 }
 impl Compositional for protos::Problem {
-    const ARITY: Integer = 1;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!()
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         if let Form::Bare(name) = &datom.form {
             budget.spend(&datom.path)?;
@@ -759,7 +702,7 @@ impl Datomizable for protos::Error {
     type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         Datom {
-            path: at.clone(),
+            path: at.child(1),
             form: Form::Struct(vec![
                 self.extent.datomize(at.child(1).child(0)),
                 self.problem.datomize(at.child(1).child(1)),
@@ -769,10 +712,6 @@ impl Datomizable for protos::Error {
     }
 }
 impl Compositional for protos::Error {
-    const ARITY: Integer = 2;
-    fn from_positions(_: Positions<'_>, _: &mut Budget) -> Result<Self, Error> {
-        unreachable!()
-    }
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         let (head, body) = datom.variant(budget, "ProtosError")?;
         if head != "ProtosError" {
@@ -785,11 +724,11 @@ impl Compositional for protos::Error {
                 },
             });
         }
-        let mut positions = body.positions("Struct")?;
-        let extent = positions.position(budget)?;
-        let problem = positions.position(budget)?;
-        positions.finish()?;
-        Ok(Self { extent, problem })
+        let mut positions = body.positions(2)?;
+        Ok(Self {
+            extent: positions.position(budget)?,
+            problem: positions.position(budget)?,
+        })
     }
 }
 
@@ -800,7 +739,7 @@ impl Scalar for String {
     fn scalar(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         budget.spend(&datom.path)?;
         match &datom.form {
-            Form::Bare(value) | Form::String(value) | Form::Meaning(value) => Ok(value.clone()),
+            Form::Bare(value) | Form::String(value) => Ok(value.clone()),
             found => Err(Error {
                 layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
@@ -828,7 +767,10 @@ impl Scalar for i64 {
                 });
             }
         };
-        if value.starts_with("-0") || (value.len() > 1 && value.starts_with('0')) {
+        if value.starts_with('+')
+            || value.starts_with("-0")
+            || (value.len() > 1 && value.starts_with('0'))
+        {
             return Err(Error {
                 layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
@@ -876,17 +818,23 @@ impl Scalar for bool {
 impl Scalar for f64 {
     fn scalar(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         budget.spend(&datom.path)?;
-        let value = match &datom.form {
-            Form::Bare(value) if value.contains('.') => value,
-            Form::Bare(value) => {
-                return Err(Error {
-                    layer: ErrorLayer::Composition,
-                    path: datom.path.clone(),
-                    kind: ErrorKind::Value {
-                        expected: "Decimal".into(),
-                        value: value.clone(),
-                    },
-                });
+        let text = match &datom.form {
+            Form::Bare(value) => value.clone(),
+            Form::Variant(whole, fraction) => {
+                budget.spend(&fraction.path)?;
+                match &fraction.form {
+                    Form::Bare(fraction) => format!("{}.{}", whole.0, fraction),
+                    found => {
+                        return Err(Error {
+                            layer: ErrorLayer::Composition,
+                            path: fraction.path.clone(),
+                            kind: ErrorKind::Form {
+                                expected: "Bare".into(),
+                                found: found.form_name().to_owned(),
+                            },
+                        });
+                    }
+                }
             }
             found => {
                 return Err(Error {
@@ -899,17 +847,27 @@ impl Scalar for f64 {
                 });
             }
         };
-        value
-            .parse::<f64>()
+        let refusal = || Error {
+            layer: ErrorLayer::Composition,
+            path: datom.path.clone(),
+            kind: ErrorKind::Value {
+                expected: "Decimal".into(),
+                value: text.clone(),
+            },
+        };
+        let (whole, fraction) = text.split_once('.').ok_or_else(refusal)?;
+        let digits = whole.strip_prefix('-').unwrap_or(whole);
+        let canonical = !digits.is_empty()
+            && digits.chars().all(|character| character.is_ascii_digit())
+            && (digits.len() == 1 || !digits.starts_with('0'))
+            && !fraction.is_empty()
+            && fraction.chars().all(|character| character.is_ascii_digit());
+        if !canonical {
+            return Err(refusal());
+        }
+        text.parse::<f64>()
             .ok()
             .filter(|value| value.is_finite())
-            .ok_or_else(|| Error {
-                layer: ErrorLayer::Composition,
-                path: datom.path.clone(),
-                kind: ErrorKind::Value {
-                    expected: "Decimal".into(),
-                    value: value.clone(),
-                },
-            })
+            .ok_or_else(refusal)
     }
 }

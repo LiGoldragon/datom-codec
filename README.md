@@ -6,87 +6,83 @@ the reader walks the expected type, writing is the exact reverse projection,
 and all naming lives in the type; the text carries only the data.
 
 ```
-{ Ada 1990 { “12 Rue de la Paix” Paris 75002 } [ Author Reviewer.{ 2024 17 } ] }
+{ Ada 1990 { «12 Rue de la Paix» Paris 75002 } [ Author Reviewer.{ 2024 17 } ] }
 ```
 
 ## In and out
 
 ```rust
-let person: Person = Potential::<Person>::from(text).actualize()?;   // may fault
-let text: String = person.textualize();                              // cannot
+let person: Person = Potential::<Person>::from(text).actualize(&mut budget)?;  // may fault
+let text: String = person.datomize(Path::new()).protosize().textualize();      // cannot
 ```
 
-`Potential<T>` is `protos::Potential<T, Datom>`; `actualize` is protosize,
-conceive, incorporate. `Datomic::textualize` is conceive, protosize,
-textualize.
+`Potential<T>` holds the text, the reader tree once it has one, and actualizes
+by protosize, datomize, compose. The ascent is total.
 
-## The concept
+## The datom
 
-`Datom` is what a protoform means before a type is known: `Variant` (a head and
-a body), `Struct`, `Vector`, `Text` (quoted), `Meaning` (parenthesized), `Word`
-(bare; the position decides). Conception walks the situated protoform and
-yields a situated datom, one situation node per datom, in the path convention
-protos states: a variant's head is child 0 and its body child 1.
+`Datom` is a `Form` at a `Path`: `Struct`, `Vector`, `Variant` (a head and a
+body), `Bare`, `String` (guillemets), `Meaning` (parentheses). A datom's path
+is where it sits: a struct's or vector's child *i* is at `child(i)`, and a
+variant's body is at `child(1)`, the convention protos states.
 
-## Datomic
+What a structure means — struct, vector, string, integer, decimal, variant — is
+said by the position it sits in, never by the structure alone. `3.14` is a
+headed structure to protos; a Decimal position rejoins it, a String position
+reads it as the text `3.14`, and an Integer position refuses it.
 
-Every corporate type bears `Datomic`: `incorporate(site)` builds the value from
-a `Site`, the datom at its situation; `conceive()` projects the value into a
-datom. A reader takes the site as the one form its position declares:
+## The two kinds
 
-```rust
-impl Datomic for Reply {
-    fn incorporate(site: Site<'_>) -> Result<Self, Fault> {
-        let v = site.variant()?;
-        match v.name {
-            "Accepted" => { let mut p = v.positions(2)?; Ok(Reply::Accepted(p.position()?, p.position()?)) }
-            "Pending"  => { v.nothing()?; Ok(Reply::Pending) }
-            other => Err(site.refuse(Problem::UnknownVariant(other.to_owned()))),
-        }
-    }
-    fn conceive(&self) -> Datom { /* the reverse projection */ }
-}
-```
+`Datomizable::datomize(at)` projects a value into a datom at a path.
+`Compositional::compose(datom, budget)` reads one back. Both are derived, with
+no attributes, for any Rust struct or enum: field order is position order, a
+field's type is the position's type, a variant carrying nothing is its head
+alone, a single-field variant carries its type's own form, and a multi-field
+variant carries an inline struct. Hand-written impls are reserved to the
+intrinsics: `String`, `i64`, `f64`, `bool`, `Meaning`, `Vec`, `Option`,
+`Result`, `Box`, and the protos types the errors carry.
 
-`Sited` reads a site as a struct (`positions`), a vector (`elements`), a variant,
-a word or text; `Positional` reads each position as its type; `Carrying` and
-`Headed` read a variant's body. Every fault raised below is placed under its
-parent's index on the way up, so a `Corporate` or `Conceptual` fault carries a
-`Locus`: the path from the root datom and the extent in the text.
+A struct reads its positions through `DatomPositioning::positions(arity)`,
+which refuses the wrong arity once, at the struct's own path, before any
+position is read.
 
-Scalars bear `Worded`: read from one bare word, written to one. `Integer`,
-`Decimal`, `Boolean` and every unit enum of the crate are worded; `Text` is
-`protos::Text`, written bare when it is one run of plain and separator glyphs
-and quoted otherwise; `Meaning` is text in parentheses. `Vec`, `Option`,
-`Result` and `Box` of a Datomic are Datomic.
+## Strings
 
-## Faults
+A string is written bare when the run needs no delimiters: no space, no
+delimiter glyph, and no separator run that would swallow the structure around
+it — a leading or trailing `.`, `!` or `:`, or two of them adjacent. So
+`gpt-5.6-luna`, `a:b:c` and `https://example.org/a` are bare, and `.a`, `a..b`
+and `5::7/128` are written in guillemets. Everything else is delimited, where
+a closing guillemet is escaped with a backslash.
 
-`Fault::Structural` passes a protos fault through. `Conceptual` names a
-structure with no datom form (`Formless`: an angled enclosure, a qualified head,
-a chain with an enclosed body) or a text that is not one value. `Corporate`
-names what the type refused: `Shape(expected, found)`, `Arity`,
-`UnknownVariant`, `Value`. Faults are themselves datomic:
+## Errors
+
+An `Error` names the layer that raised it — `Protos`, `Datom`, `Composition` —
+the path of the datom where it arose, and its kind: `Budget`, `Structural`,
+`Form`, `Arity`, `Value`, `Variant`. Errors are themselves datomizable, and
+`Potential::reader_extent(path)` resolves an error's path back to the protos
+node, and so to the extent in the text.
 
 ```
-Corporate.{ { [ 1 ] { 4 5 } } Value.x }      ; [ 1 x ] as Vector<Integer>
+[ 1 x ]                        ; read as Vector<Integer>
+Error.{ Composition [ 1 ] Value.{ Integer x } }
 ```
+
+## Budget
+
+`Budget` bounds a composition: `remaining` nodes, a composition depth, and the
+protos `ReaderBudget` for the parse. Every composition path spends, the bare
+variant included.
 
 ## Anatomy
 
-| module | what | kind |
-|---|---|---|
-| `anatomy` | the concept, the meaning, the faults | |
-| `kinds` | the kinds | `Datomic`, `Worded`, `Sited`, `Positional`, `Counted`, `Carrying`, `Headed` |
-| `site` | a datom at its situation, read as one form | `Sited`, `Positional`, `Carrying`, `Headed`, `Incorporable` |
-| `conception` | situated protoform to situated datom | `Conceivable<Datom>` |
-| `protosization` | datom to protoform; the writer computes the situation | `Protosizable`, `Textualizable` |
-| `worded` | the scalars | `Worded` |
-| `containers` | text, meaning, vector, option, result, box | `Datomic` |
-| `faults` | the faults, pathed and datomic | `Pathed`, `Datomic` |
-| `dropping` | iterative drop of the datom tree | |
+| module | what |
+|---|---|
+| `core` | the datom, the budget, the errors, the kinds, `Potential` |
+| `composition` | protos to datom, the intrinsics, the scalars |
+| `projection` | datom to protos; the writer computes the extents |
+| `dropping` | iterative drop of the datom tree |
 
-No free functions, no inherent impls, no zero-sized bearers, no closures fed to
-macros: `nix flake check` carries the guards, with build, test, fmt, clippy and
-doc. Every walk is iterative; incorporation recurses only as deep as the
-corporate type itself nests, which the text cannot exceed.
+No free functions, no inherent impls, no zero-sized bearers: `nix flake check`
+carries the guards, with build, test, fmt, clippy, doc and the generated
+contract. Every walk is iterative.
