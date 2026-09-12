@@ -29,29 +29,35 @@ use crate::*;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Decimal(f64);
 
-/// The reason a float is not a decimal.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct NotFinite;
+/// A value that is not a decimal refuses in the crate's own vocabulary,
+/// naming the Decimal position it fails and the text it would have been.
+pub trait DecimalRefusing {
+    fn not_a_decimal(&self) -> Error;
+}
 
-impl fmt::Display for NotFinite {
-    fn fmt(&self, form: &mut fmt::Formatter<'_>) -> fmt::Result {
-        form.write_str("a decimal is finite: NaN and infinity have no datom text")
+impl<T: fmt::Display> DecimalRefusing for T {
+    fn not_a_decimal(&self) -> Error {
+        Error::composition(
+            Path::new(),
+            ErrorKind::Value {
+                expected: "Decimal".into(),
+                value: self.to_string(),
+            },
+        )
     }
 }
 
-impl std::error::Error for NotFinite {}
-
 impl TryFrom<f64> for Decimal {
-    type Error = NotFinite;
+    type Error = Error;
 
-    fn try_from(value: f64) -> Result<Self, NotFinite> {
+    fn try_from(value: f64) -> Result<Self, Error> {
         if value.is_finite() {
             // `-0.0 == 0.0` but they hash and order apart, so the sign of zero
             // is normalized away here rather than left to break Eq/Hash/Ord
             // agreement further down.
             Ok(Self(if value == 0.0 { 0.0 } else { value }))
         } else {
-            Err(NotFinite)
+            Err(value.not_a_decimal())
         }
     }
 }
@@ -160,25 +166,26 @@ impl Scalar for Decimal {
                 });
             }
         };
-        text.parse::<Decimal>().map_err(|_| Error {
-            layer: ErrorLayer::Composition,
-            path: datom.path.clone(),
-            kind: ErrorKind::Value {
-                expected: "Decimal".into(),
-                value: text,
-            },
+        text.parse::<Decimal>().map_err(|_| {
+            Error::composition(
+                datom.path.clone(),
+                ErrorKind::Value {
+                    expected: "Decimal".into(),
+                    value: text,
+                },
+            )
         })
     }
 }
 
 impl FromStr for Decimal {
-    type Err = NotFinite;
+    type Err = Error;
 
     /// Canonical datom decimal text: a mandatory point, ASCII digits on both
     /// sides, no leading plus, and no leading zero in the whole part except a
     /// lone `0`.
-    fn from_str(text: &str) -> Result<Self, NotFinite> {
-        let (whole, fraction) = text.split_once('.').ok_or(NotFinite)?;
+    fn from_str(text: &str) -> Result<Self, Error> {
+        let (whole, fraction) = text.split_once('.').ok_or_else(|| text.not_a_decimal())?;
         let digits = whole.strip_prefix('-').unwrap_or(whole);
         let canonical = !digits.is_empty()
             && digits.chars().all(|character| character.is_ascii_digit())
@@ -186,8 +193,10 @@ impl FromStr for Decimal {
             && !fraction.is_empty()
             && fraction.chars().all(|character| character.is_ascii_digit());
         if !canonical {
-            return Err(NotFinite);
+            return Err(text.not_a_decimal());
         }
-        text.parse::<f64>().map_err(|_| NotFinite)?.try_into()
+        text.parse::<f64>()
+            .map_err(|_| text.not_a_decimal())?
+            .try_into()
     }
 }

@@ -3,7 +3,7 @@
 
 use datom_codec::{
     Actualizing, Budget, Composable, Composing, Compositional, Datom, Datomizable, Decimal, Error,
-    ErrorKind, ErrorLayer, Form, NotFinite, Path, Pathing, Potential,
+    ErrorKind, ErrorLayer, Form, Path, Pathing, Potential,
 };
 use protos::{Protosizable, ReaderBudget, Textualizable};
 
@@ -365,10 +365,11 @@ fn a_decimal_holds_only_what_a_decimal_position_reads_back() {
     // writer produced, silently, what the reader refused. A Decimal cannot
     // hold such a value at all, so the writer can no longer be handed one.
     for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-        assert_eq!(
-            Decimal::try_from(value),
-            Err(NotFinite),
-            "{value} has no datom text and must not become a Decimal"
+        let refusal = Decimal::try_from(value)
+            .expect_err("{value} has no datom text and must not become a Decimal");
+        assert!(
+            matches!(refusal.kind, ErrorKind::Value { ref expected, .. } if expected == "Decimal"),
+            "{value} refuses as a Decimal, got {refusal:?}"
         );
     }
     // And what a Decimal does hold makes the round trip whole: every value

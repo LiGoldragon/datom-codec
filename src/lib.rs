@@ -22,7 +22,7 @@ pub use core::{
     Datom, DatomPositioning, Datomizable, Error, ErrorKind, ErrorLayer, ErrorRaising, Form, Naming,
     Pathing, Positioning, Positions, Potential, PotentialExtenting, ProtosExtenting,
 };
-pub use decimal::{Decimal, Decimating, NotFinite};
+pub use decimal::{Decimal, DecimalRefusing, Decimating};
 pub use derive::{Composing, Datomizable};
 pub use protos::Symbol;
 pub type Integer = i64;
