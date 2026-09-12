@@ -5,13 +5,13 @@ use crate::composition::Variantizing;
 use crate::{Integer, Opaque, Path};
 use protos::Symbol;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Datom {
     pub path: Path,
     pub form: Form,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Form {
     Struct(Vec<Datom>),
     Vector(Vec<Datom>),
@@ -21,7 +21,7 @@ pub enum Form {
     Meaning(Opaque),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Budget {
     pub remaining: Integer,
     pub reader: protos::ReaderBudget,
@@ -63,13 +63,13 @@ impl CompositionDepthing for Budget {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ErrorLayer {
     Protos,
     Datom,
     Composition,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Error {
     pub layer: ErrorLayer,
     pub path: Path,
@@ -87,7 +87,7 @@ impl ErrorRaising for Error {
         }
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ErrorKind {
     Budget,
     Structural(protos::Error),
