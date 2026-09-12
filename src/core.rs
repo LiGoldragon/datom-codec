@@ -141,7 +141,7 @@ pub trait Compositional: Composing {
     fn from_positions(positions: Positions<'_>) -> Result<Self, Error>;
 }
 /// A composition becomes a datom. Infallible, and the only conversion
-/// this kind names: the descent `Protos -> Datom` is [`DatomForming`],
+/// this kind names: the descent `Protos -> Datom` is [`crate::DatomForming`],
 /// which may fail and therefore is not this.
 pub trait Datomizable {
     fn datomize(&self, at: Path) -> Datom;
