@@ -41,6 +41,8 @@ pub trait Datomizable {
     fn datomize(&self, input: Path) -> Self::Output;
 }
 #[rustfmt::skip]
+pub trait Composing {}
+#[rustfmt::skip]
 pub trait Compositional {}
 #[rustfmt::skip]
 pub trait Composable {}

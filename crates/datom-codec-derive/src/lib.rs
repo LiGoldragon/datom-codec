@@ -13,8 +13,8 @@ fn fields<'a>(input: &'a DeriveInput, capability: &str) -> Result<&'a Fields, To
     }
 }
 
-#[proc_macro_derive(Compositional)]
-pub fn compositional(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(Composing)]
+pub fn composing(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
     if let Data::Enum(data) = &input.data {
@@ -25,7 +25,7 @@ pub fn compositional(input: TokenStream) -> TokenStream {
                 bounded_generics
                     .make_where_clause()
                     .predicates
-                    .push(syn::parse_quote!(#ident: ::datom_codec::Compositional));
+                    .push(syn::parse_quote!(#ident: ::datom_codec::Composing));
             }
         }
         let (impl_generics, ty_generics, where_clause) = bounded_generics.split_for_impl();
@@ -46,7 +46,6 @@ pub fn compositional(input: TokenStream) -> TokenStream {
             let variant_name = &variant.ident;
             let spelling = variant_name.to_string();
             let fields = &variant.fields;
-            let reads = fields.iter().enumerate().map(|(index, field)| { let ty = &field.ty; let binding = syn::Ident::new(&format!("field_{index}"), proc_macro2::Span::call_site()); quote!(let #binding: #ty = positions.position(budget)?;) });
             let bindings: Vec<_> = (0..fields.len()).map(|index| syn::Ident::new(&format!("field_{index}"), proc_macro2::Span::call_site())).collect();
             let build = match fields { Fields::Named(named) => { let names = named.named.iter().map(|field| field.ident.as_ref().unwrap()); quote!(Self::#variant_name { #(#names: #bindings),* }) }, Fields::Unnamed(_) => quote!(Self::#variant_name(#(#bindings),*)), Fields::Unit => quote!(Self::#variant_name) };
             let count = fields.len();
@@ -54,13 +53,14 @@ pub fn compositional(input: TokenStream) -> TokenStream {
                 let binding = &bindings[0];
                 quote!(#spelling => { let #binding = body.compose(budget)?; Ok(#build) })
             } else {
-quote!(#spelling => { let mut positions = ::datom_codec::DatomPositioning::positions(body, #count as ::datom_codec::Integer)?; #(#reads)* Ok(#build) })
+                let types = fields.iter().map(|field| &field.ty);
+                quote!(#spelling => { let (#(#bindings),*) = ::datom_codec::Composable::compose_positions::<(#(#types,)*)>(body, budget)?; Ok(#build) })
             }
         });
         return quote! {
-            impl #impl_generics ::datom_codec::Compositional for #name #ty_generics #where_clause {
+            impl #impl_generics ::datom_codec::Composing for #name #ty_generics #where_clause {
                 fn compose(datom: &::datom_codec::Datom, budget: &mut ::datom_codec::Budget) -> Result<Self, ::datom_codec::Error> {
-                    use ::datom_codec::{Budgeting, Composable, Positioning, Variantizing};
+                    use ::datom_codec::{Budgeting, Composable, Variantizing};
                     match &datom.form {
                         ::datom_codec::Form::Bare(head) => { budget.spend(&datom.path)?; match head.as_str() { #(#unit_arms,)* other => Err(<::datom_codec::Error as ::datom_codec::ErrorRaising>::composition(datom.path.clone(), ::datom_codec::ErrorKind::Variant { expected: stringify!(#name).to_owned(), found: other.to_owned() })) } },
                         _ => { let (head, body) = datom.variant(budget, "Variant")?; match head { #(#arms,)* other => Err(<::datom_codec::Error as ::datom_codec::ErrorRaising>::composition(datom.path.clone(), ::datom_codec::ErrorKind::Variant { expected: stringify!(#name).to_owned(), found: other.to_owned() })) } }
@@ -69,7 +69,7 @@ quote!(#spelling => { let mut positions = ::datom_codec::DatomPositioning::posit
             }
         }.into();
     }
-    let fields = match fields(&input, "Compositional") {
+    let fields = match fields(&input, "Composing") {
         Ok(fields) => fields,
         Err(error) => return error,
     };
@@ -80,14 +80,14 @@ quote!(#spelling => { let mut positions = ::datom_codec::DatomPositioning::posit
             bounded_generics
                 .make_where_clause()
                 .predicates
-                .push(syn::parse_quote!(#ident: ::datom_codec::Compositional));
+                .push(syn::parse_quote!(#ident: ::datom_codec::Composing));
         }
     }
     let (impl_generics, ty_generics, where_clause) = bounded_generics.split_for_impl();
     let reads = fields.iter().enumerate().map(|(index, field)| {
         let ty = &field.ty;
         let binding = syn::Ident::new(&format!("field_{index}"), proc_macro2::Span::call_site());
-        quote!(let #binding: #ty = positions.position(budget)?;)
+        quote!(let #binding: #ty = positions.position()?;)
     });
     let bindings: Vec<_> = (0..fields.len())
         .map(|index| syn::Ident::new(&format!("field_{index}"), proc_macro2::Span::call_site()))
@@ -106,11 +106,15 @@ quote!(#spelling => { let mut positions = ::datom_codec::DatomPositioning::posit
     let arity = fields.len();
     quote! {
         impl #impl_generics ::datom_codec::Compositional for #name #ty_generics #where_clause {
-            fn compose(datom: &::datom_codec::Datom, budget: &mut ::datom_codec::Budget) -> Result<Self, ::datom_codec::Error> {
-                use ::datom_codec::{Budgeting, DatomPositioning, Positioning};
-                budget.spend(&datom.path)?;
-                let mut positions = datom.positions(#arity as ::datom_codec::Integer)?;
+            const ARITY: ::datom_codec::Integer = #arity as ::datom_codec::Integer;
+            fn from_positions(mut positions: ::datom_codec::Positions<'_>) -> Result<Self, ::datom_codec::Error> {
+                use ::datom_codec::Positioning;
                 #(#reads)* Ok(#build)
+            }
+        }
+        impl #impl_generics ::datom_codec::Composing for #name #ty_generics #where_clause {
+            fn compose(datom: &::datom_codec::Datom, budget: &mut ::datom_codec::Budget) -> Result<Self, ::datom_codec::Error> {
+                ::datom_codec::Composable::compose_positions(datom, budget)
             }
         }
     }.into()
@@ -136,10 +140,9 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
             let spelling = variant_name.to_string();
             let bindings: Vec<_> = (0..variant.fields.len()).map(|index| syn::Ident::new(&format!("field_{index}"), proc_macro2::Span::call_site())).collect();
             let pattern = match &variant.fields { Fields::Named(named) => { let names = named.named.iter().map(|field| field.ident.as_ref().unwrap()); quote!(Self::#variant_name { #(#names: #bindings),* }) }, Fields::Unnamed(_) => quote!(Self::#variant_name(#(#bindings),*)), Fields::Unit => quote!(Self::#variant_name) };
-            let child_values: Vec<_> = bindings.iter().enumerate().map(|(index, binding)| quote!((#binding).datomize(at.child(1).child(#index as ::datom_codec::Integer)))).collect();
             let body = match variant.fields.len() {
                 1 => { let binding = &bindings[0]; quote!((#binding).datomize(at.child(1))) },
-                _ => quote!(::datom_codec::Datom { path: at.child(1), form: ::datom_codec::Form::Struct(vec![#(#child_values),*]) }),
+                _ => quote!((#(#bindings,)*).datomize(at.child(1))),
             };
             if variant.fields.is_empty() {
                 quote!(#pattern => ::datom_codec::Datom { path: at.clone(), form: ::datom_codec::Form::Bare(#spelling.to_owned()) })

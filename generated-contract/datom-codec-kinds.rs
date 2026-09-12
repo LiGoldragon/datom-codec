@@ -12,7 +12,7 @@ pub trait Datomizable {
     fn datomize(&self, input: crate::Path) -> Self::Output;
 }
 #[rustfmt::skip]
-pub trait Compositional {
+pub trait Composing {
     fn compose(
         input_0: crate::Datom,
         input_1: crate::Budget,
@@ -21,8 +21,21 @@ pub trait Compositional {
         Self: Sized;
 }
 #[rustfmt::skip]
+pub trait Compositional: Composing {
+    const ARITY: i64;
+    fn from_positions(input: crate::Positions) -> std::result::Result<Self, crate::Error>
+    where
+        Self: Sized;
+}
+#[rustfmt::skip]
 pub trait Composable {
     fn compose(&self, input: crate::Budget) -> std::result::Result<Self, crate::Error>
+    where
+        Self: Sized;
+    fn compose_positions(
+        &self,
+        input: crate::Budget,
+    ) -> std::result::Result<Self, crate::Error>
     where
         Self: Sized;
 }

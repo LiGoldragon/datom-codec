@@ -195,7 +195,7 @@ impl Datomizable for String {
         Datom { path: at, form }
     }
 }
-impl Compositional for String {
+impl Composing for String {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         datom.compose_bare_string(budget)
     }
@@ -285,7 +285,7 @@ impl Datomizable for i64 {
         }
     }
 }
-impl Compositional for i64 {
+impl Composing for i64 {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         Self::scalar(datom, budget)
     }
@@ -303,7 +303,7 @@ impl Datomizable for f64 {
         }
     }
 }
-impl Compositional for f64 {
+impl Composing for f64 {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         Self::scalar(datom, budget)
     }
@@ -317,7 +317,7 @@ impl Datomizable for bool {
         }
     }
 }
-impl Compositional for bool {
+impl Composing for bool {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         Self::scalar(datom, budget)
     }
@@ -337,7 +337,7 @@ impl<T: Datomizable<Output = Datom>> Datomizable for Vec<T> {
         }
     }
 }
-impl<T: Compositional> Compositional for Vec<T> {
+impl<T: Composing> Composing for Vec<T> {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         budget.spend(&datom.path)?;
         let children = match &datom.form {
@@ -368,7 +368,7 @@ impl Datomizable for Meaning {
         }
     }
 }
-impl Compositional for Meaning {
+impl Composing for Meaning {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         budget.spend(&datom.path)?;
         match &datom.form {
@@ -391,7 +391,7 @@ impl<T: Datomizable<Output = Datom>> Datomizable for Box<T> {
         self.as_ref().datomize(at)
     }
 }
-impl<T: Compositional> Compositional for Box<T> {
+impl<T: Composing> Composing for Box<T> {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         Ok(Box::new(datom.compose(budget)?))
     }
@@ -442,7 +442,7 @@ impl<T: Datomizable<Output = Datom>> Datomizable for Option<T> {
         }
     }
 }
-impl<T: Compositional> Compositional for Option<T> {
+impl<T: Composing> Composing for Option<T> {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         if matches!(&datom.form, Form::Bare(head) if head == "None") {
             budget.spend(&datom.path)?;
@@ -471,7 +471,7 @@ impl<T: Datomizable<Output = Datom>, E: Datomizable<Output = Datom>> Datomizable
         }
     }
 }
-impl<T: Compositional, E: Compositional> Compositional for Result<T, E> {
+impl<T: Composing, E: Composing> Composing for Result<T, E> {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         let (head, body) = datom.variant(budget, "Variant")?;
         match head {
@@ -502,7 +502,7 @@ impl Datomizable for protos::Extent {
         .named_variant(at, "Extent")
     }
 }
-impl Compositional for protos::Extent {
+impl Composing for protos::Extent {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         let (head, body) = datom.variant(budget, "Extent")?;
         if head != "Extent" {
@@ -515,9 +515,7 @@ impl Compositional for protos::Extent {
                 },
             });
         }
-        let mut positions = body.positions(2)?;
-        let start: i64 = positions.position(budget)?;
-        let end: i64 = positions.position(budget)?;
+        let (start, end): (i64, i64) = body.compose_positions(budget)?;
         Ok(Self {
             start: start.try_into().map_err(|_| Error {
                 layer: ErrorLayer::Composition,
@@ -553,7 +551,7 @@ impl Datomizable for protos::Separator {
         }
     }
 }
-impl Compositional for protos::Separator {
+impl Composing for protos::Separator {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         budget.spend(&datom.path)?;
         match &datom.form {
@@ -586,7 +584,7 @@ impl Datomizable for protos::Symbol {
         self.0.datomize(at)
     }
 }
-impl Compositional for protos::Symbol {
+impl Composing for protos::Symbol {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         Ok(Self(String::compose(datom, budget)?))
     }
@@ -598,7 +596,7 @@ impl Datomizable for protos::ReaderBudget {
         (self.remaining as Integer).datomize(at)
     }
 }
-impl Compositional for protos::ReaderBudget {
+impl Composing for protos::ReaderBudget {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         let remaining: Integer = datom.compose(budget)?;
         Ok(Self {
@@ -649,7 +647,7 @@ impl Datomizable for protos::Problem {
         }
     }
 }
-impl Compositional for protos::Problem {
+impl Composing for protos::Problem {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         if let Form::Bare(name) = &datom.form {
             budget.spend(&datom.path)?;
@@ -711,7 +709,7 @@ impl Datomizable for protos::Error {
         .named_variant(at, "ProtosError")
     }
 }
-impl Compositional for protos::Error {
+impl Composing for protos::Error {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         let (head, body) = datom.variant(budget, "ProtosError")?;
         if head != "ProtosError" {
@@ -724,10 +722,15 @@ impl Compositional for protos::Error {
                 },
             });
         }
-        let mut positions = body.positions(2)?;
+        body.compose_positions(budget)
+    }
+}
+impl Compositional for protos::Error {
+    const ARITY: Integer = 2;
+    fn from_positions(mut positions: Positions<'_>) -> Result<Self, Error> {
         Ok(Self {
-            extent: positions.position(budget)?,
-            problem: positions.position(budget)?,
+            extent: positions.position()?,
+            problem: positions.position()?,
         })
     }
 }

@@ -1,41 +1,40 @@
 use datom_codec::{
-    Actualizing, Budget, Composable, Compositional, Datom, Datomizable, Error, ErrorKind,
-    ErrorLayer, ErrorRaising, Form, Meaning, Path, Potential, PotentialExtenting, ProtosExtenting,
-    Scalar,
+    Actualizing, Budget, Composable, Composing, Datom, Datomizable, Error, ErrorKind, ErrorLayer,
+    ErrorRaising, Form, Meaning, Path, Potential, PotentialExtenting, ProtosExtenting, Scalar,
 };
 use protos::{Protosizable, ReaderBudget, Textualizable};
 
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 struct Score {
     name: String,
     value: i64,
     enabled: bool,
 }
 
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 enum Reply {
     Accepted(i64, String),
     Pending,
 }
 
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 enum Message {
     Reply(Reply),
 }
 
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 struct PunctuatedStrings {
     model: String,
     url: String,
     qualified_name: String,
 }
 
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 enum Pair {
     Values(i64, i64),
 }
 
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 struct Wrapper<T> {
     value: T,
 }
@@ -703,7 +702,7 @@ fn typed_protos_errors_round_trip_without_a_reader_tree() {
     assert_eq!(rebuilt, error);
 }
 
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 enum GenericReply<T> {
     Pending,
     One(T),
@@ -801,7 +800,7 @@ fn composition_depth_is_bounded_independently_from_node_budget() {
 
 #[derive(Debug, PartialEq)]
 struct Recursive(usize);
-impl Compositional for Recursive {
+impl Composing for Recursive {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         use datom_codec::{Composable, Variantizing};
         if matches!(&datom.form, Form::Bare(name) if name == "Pending") {
@@ -845,19 +844,19 @@ fn wide_projection_keeps_canonical_extents() {
     );
 }
 
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 enum RecursiveNode<T> {
     Leaf(T),
     Next(Box<RecursiveNode<T>>),
 }
 
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 struct Chain {
     string: String,
     chain_option: Option<Box<Chain>>,
 }
 
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 struct GenericChain<T> {
     value: T,
     next: Option<Box<GenericChain<T>>>,
@@ -917,19 +916,19 @@ fn recursive_generic_enum_derives_without_a_self_bound_cycle() {
     assert_eq!(rebuilt, value);
 }
 
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 struct NodeData<T>(T);
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 enum Node<T> {
     Data(NodeData<T>),
     Next(Box<Node<T>>),
 }
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 enum MutualA<T> {
     End,
     Next(Box<MutualB<T>>),
 }
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 enum MutualB<T> {
     Next(Box<MutualA<T>>),
     Data(T),

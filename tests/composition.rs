@@ -2,8 +2,8 @@
 //! positional decimal, error paths, and the bare-string rule.
 
 use datom_codec::{
-    Actualizing, Budget, Composable, Compositional, Datom, Datomizable, Error, ErrorKind,
-    ErrorLayer, Form, Path, Pathing, Potential,
+    Actualizing, Budget, Composable, Composing, Compositional, Datom, Datomizable, Error,
+    ErrorKind, ErrorLayer, Form, Path, Pathing, Potential,
 };
 use protos::{Protosizable, ReaderBudget, Textualizable};
 
@@ -16,15 +16,16 @@ fn budget(remaining: i64) -> Budget {
     }
 }
 
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 enum Shape {
     Unit,
     Empty(),
     Named {},
     Carrying(i64),
+    Pair(i64, String),
 }
 
-#[derive(Debug, PartialEq, Compositional, Datomizable)]
+#[derive(Debug, PartialEq, Composing, Datomizable)]
 struct Triple {
     first: String,
     second: i64,
@@ -266,4 +267,96 @@ proptest::proptest! {
             .unwrap_or_else(|error| panic!("{carried} composes: {error:?}"));
         proptest::prop_assert_eq!(composed, Some(value));
     }
+}
+
+#[test]
+fn a_positional_type_states_its_arity_and_never_reads_the_tree() {
+    assert_eq!(
+        <Triple as Compositional>::ARITY,
+        3,
+        "the derive states the struct's positions on the type"
+    );
+    let whole = Triple {
+        first: "a".into(),
+        second: 2,
+        third: true,
+    };
+    let datom = whole.datomize(Path::new());
+    assert_eq!(
+        datom.compose_positions::<Triple>(&mut budget(8)).unwrap(),
+        whole,
+        "a caller composes a positional type without naming its arity"
+    );
+    let Form::Struct(ref children) = datom.form else {
+        panic!("a derived struct datomizes as a struct");
+    };
+    let short = Datom {
+        path: Path::new(),
+        form: Form::Struct(children[..2].to_vec()),
+    };
+    let error = short
+        .compose_positions::<Triple>(&mut budget(8))
+        .unwrap_err();
+    assert_eq!(
+        (error.layer, error.path, error.kind),
+        (
+            ErrorLayer::Composition,
+            Path::new(),
+            ErrorKind::Arity {
+                expected: 3,
+                found: 2
+            }
+        ),
+        "the declared arity is refused once, at the struct's own path"
+    );
+}
+
+#[test]
+fn a_tuple_is_the_positional_type_a_multi_field_variant_payload_has_no_name_for() {
+    assert_eq!(<(i64, String) as Compositional>::ARITY, 2);
+    let value = Shape::Pair(7, "seven".into());
+    let text = value.datomize(Path::new()).protosize().textualize();
+    assert_eq!(text, "Pair.{ 7 seven }");
+    let composed: Shape = Potential::from(text.as_str())
+        .actualize(&mut budget(8))
+        .unwrap_or_else(|error| panic!("{text} composes: {error:?}"));
+    assert_eq!(composed, value);
+    let error = Potential::<Shape>::from("Pair.{ 7 seven 7 }")
+        .actualize(&mut budget(8))
+        .unwrap_err();
+    assert_eq!(
+        (error.path, error.kind),
+        (
+            vec![1],
+            ErrorKind::Arity {
+                expected: 2,
+                found: 3
+            }
+        ),
+        "a variant payload's arity is refused at the payload's own path"
+    );
+}
+
+#[test]
+fn every_node_of_a_multi_field_variant_spends_the_composition_budget() {
+    let text = Shape::Pair(7, "seven".into())
+        .datomize(Path::new())
+        .protosize()
+        .textualize();
+    for remaining in 0..4 {
+        let error = Potential::<Shape>::from(text.as_str())
+            .actualize(&mut budget(remaining))
+            .unwrap_err();
+        assert_eq!(
+            error.kind,
+            ErrorKind::Budget,
+            "the variant head, its payload struct and its two positions are four nodes"
+        );
+    }
+    assert_eq!(
+        Potential::<Shape>::from(text.as_str())
+            .actualize(&mut budget(4))
+            .unwrap(),
+        Shape::Pair(7, "seven".into())
+    );
 }

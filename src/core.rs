@@ -124,10 +124,21 @@ impl ProtosExtenting for protos::Protos {
 }
 
 pub trait Composable {
-    fn compose<T: Compositional>(&self, budget: &mut Budget) -> Result<T, Error>;
+    fn compose<T: Composing>(&self, budget: &mut Budget) -> Result<T, Error>;
+    fn compose_positions<T: Compositional>(&self, budget: &mut Budget) -> Result<T, Error>;
 }
-pub trait Compositional: Sized {
+/// A type a datom composes into. Every composable type bears this: the
+/// scalars, the containers, the enums, and — through [`Compositional`] — the
+/// positional types.
+pub trait Composing: Sized {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error>;
+}
+/// A type whose datom form is a struct of positions. It states its arity and
+/// builds itself from its positions; it never reads the tree. The reading —
+/// budget, arity, positions, locus — is [`Composable::compose_positions`].
+pub trait Compositional: Composing {
+    const ARITY: Integer;
+    fn from_positions(positions: Positions<'_>) -> Result<Self, Error>;
 }
 pub trait Datomizable {
     type Output;
@@ -144,21 +155,23 @@ impl Pathing for Path {
     }
 }
 
+/// The positions of one struct form, with the budget they are read against.
 pub struct Positions<'a> {
     children: &'a [Datom],
     next: usize,
+    budget: &'a mut Budget,
 }
 pub trait Positioning {
-    fn position<T: Compositional>(&mut self, budget: &mut Budget) -> Result<T, Error>;
+    fn position<T: Composing>(&mut self) -> Result<T, Error>;
 }
 impl Positioning for Positions<'_> {
     /// `positions` validated the count before handing these out, so every
     /// position it promised is there; asking past that arity is a mistake in
     /// the caller, not a refusal the datum earned.
-    fn position<T: Compositional>(&mut self, budget: &mut Budget) -> Result<T, Error> {
+    fn position<T: Composing>(&mut self) -> Result<T, Error> {
         let child = &self.children[self.next];
         self.next += 1;
-        child.compose(budget)
+        child.compose(self.budget)
     }
 }
 
@@ -178,10 +191,18 @@ impl Naming for Form {
     }
 }
 pub trait DatomPositioning {
-    fn positions(&self, arity: Integer) -> Result<Positions<'_>, Error>;
+    fn positions<'a>(
+        &'a self,
+        arity: Integer,
+        budget: &'a mut Budget,
+    ) -> Result<Positions<'a>, Error>;
 }
 impl DatomPositioning for Datom {
-    fn positions(&self, arity: Integer) -> Result<Positions<'_>, Error> {
+    fn positions<'a>(
+        &'a self,
+        arity: Integer,
+        budget: &'a mut Budget,
+    ) -> Result<Positions<'a>, Error> {
         let children = match &self.form {
             Form::Struct(children) => children,
             found => {
@@ -205,15 +226,25 @@ impl DatomPositioning for Datom {
                 },
             });
         }
-        Ok(Positions { children, next: 0 })
+        Ok(Positions {
+            children,
+            next: 0,
+            budget,
+        })
     }
 }
 impl Composable for Datom {
-    fn compose<T: Compositional>(&self, budget: &mut Budget) -> Result<T, Error> {
+    fn compose<T: Composing>(&self, budget: &mut Budget) -> Result<T, Error> {
         budget.enter_composition(&self.path)?;
         let result = T::compose(self, budget);
         budget.leave_composition();
         result
+    }
+    /// The one reading of a positional tree: the budget it spends, the arity it
+    /// demands, the positions it hands out, and the path it refuses at.
+    fn compose_positions<T: Compositional>(&self, budget: &mut Budget) -> Result<T, Error> {
+        budget.spend(&self.path)?;
+        T::from_positions(self.positions(T::ARITY, budget)?)
     }
 }
 
@@ -231,7 +262,7 @@ impl Datomizable for ErrorLayer {
         }
     }
 }
-impl Compositional for ErrorLayer {
+impl Composing for ErrorLayer {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         budget.spend(&datom.path)?;
         match &datom.form {
@@ -301,34 +332,31 @@ impl Datomizable for ErrorKind {
         }
     }
 }
-impl Compositional for ErrorKind {
+impl Composing for ErrorKind {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         if matches!(&datom.form, Form::Bare(name) if name == "Budget") {
             budget.spend(&datom.path)?;
             return Ok(Self::Budget);
         }
         let (head, body) = datom.variant(budget, "ErrorKind")?;
-        if head == "Structural" {
-            return Ok(Self::Structural(body.compose(budget)?));
-        }
-        let mut positions = body.positions(2)?;
         match head {
-            "Form" => Ok(Self::Form {
-                expected: positions.position(budget)?,
-                found: positions.position(budget)?,
-            }),
-            "Arity" => Ok(Self::Arity {
-                expected: positions.position(budget)?,
-                found: positions.position(budget)?,
-            }),
-            "Value" => Ok(Self::Value {
-                expected: positions.position(budget)?,
-                value: positions.position(budget)?,
-            }),
-            "Variant" => Ok(Self::Variant {
-                expected: positions.position(budget)?,
-                found: positions.position(budget)?,
-            }),
+            "Structural" => Ok(Self::Structural(body.compose(budget)?)),
+            "Arity" => {
+                let (expected, found) = body.compose_positions(budget)?;
+                Ok(Self::Arity { expected, found })
+            }
+            "Form" => {
+                let (expected, found) = body.compose_positions(budget)?;
+                Ok(Self::Form { expected, found })
+            }
+            "Value" => {
+                let (expected, value) = body.compose_positions(budget)?;
+                Ok(Self::Value { expected, value })
+            }
+            "Variant" => {
+                let (expected, found) = body.compose_positions(budget)?;
+                Ok(Self::Variant { expected, found })
+            }
             found => Err(Error::composition(
                 datom.path.clone(),
                 ErrorKind::Variant {
@@ -354,6 +382,16 @@ impl Datomizable for Error {
     }
 }
 impl Compositional for Error {
+    const ARITY: Integer = 3;
+    fn from_positions(mut positions: Positions<'_>) -> Result<Self, Error> {
+        Ok(Self {
+            layer: positions.position()?,
+            path: positions.position()?,
+            kind: positions.position()?,
+        })
+    }
+}
+impl Composing for Error {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         let (head, body) = datom.variant(budget, "Error")?;
         if head != "Error" {
@@ -365,12 +403,7 @@ impl Compositional for Error {
                 },
             ));
         }
-        let mut positions = body.positions(3)?;
-        Ok(Self {
-            layer: positions.position(budget)?,
-            path: positions.position(budget)?,
-            kind: positions.position(budget)?,
-        })
+        body.compose_positions(budget)
     }
 }
 
@@ -409,7 +442,7 @@ impl<T> PotentialExtenting for Potential<T> {
         self.reader.as_ref()?.at(path).map(ProtosExtenting::extent)
     }
 }
-impl<T: Compositional> Actualizing<T> for Potential<T> {
+impl<T: Composing> Actualizing<T> for Potential<T> {
     fn actualize(&mut self, budget: &mut Budget) -> Result<T, Error> {
         use protos::BoundedProtosizable;
         let protos = self

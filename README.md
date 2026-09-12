@@ -31,20 +31,24 @@ said by the position it sits in, never by the structure alone. `3.14` is a
 headed structure to protos; a Decimal position rejoins it, a String position
 reads it as the text `3.14`, and an Integer position refuses it.
 
-## The two kinds
+## The kinds
 
 `Datomizable::datomize(at)` projects a value into a datom at a path.
-`Compositional::compose(datom, budget)` reads one back. Both are derived, with
-no attributes, for any Rust struct or enum: field order is position order, a
+`Composing::compose(datom, budget)` reads one back. Both are derived, with no
+attributes, for any Rust struct or enum: field order is position order, a
 field's type is the position's type, a variant carrying nothing is its head
 alone, a single-field variant carries its type's own form, and a multi-field
 variant carries an inline struct. Hand-written impls are reserved to the
 intrinsics: `String`, `i64`, `f64`, `bool`, `Meaning`, `Vec`, `Option`,
-`Result`, `Box`, and the protos types the errors carry.
+`Result`, `Box`, the tuples, and the protos types the errors carry.
 
-A struct reads its positions through `DatomPositioning::positions(arity)`,
-which refuses the wrong arity once, at the struct's own path, before any
-position is read.
+The datom composes; the type states its positions. A type whose form is a
+struct bears `Compositional`: it declares `ARITY` and builds itself from
+`Positions` in order, and reads nothing. The reading — the budget it spends,
+the arity it demands, the positions it hands out, and the path it refuses at —
+is `Composable::compose_positions` on the datom, written once. A multi-field
+variant's payload is a positional type with no name of its own, so it is read
+as the tuple it is; the tuples bear `Compositional` for arities two to twelve.
 
 ## Strings
 
