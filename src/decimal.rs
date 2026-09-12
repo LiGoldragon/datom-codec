@@ -26,7 +26,20 @@ use crate::*;
 ///
 /// The inner `f64` is private. [`Decimal::try_from`] is the only way in, and
 /// it refuses every value that has no datom text.
+///
+/// One way in is not yet every way in. Under the `rkyv` feature the archived
+/// form is validated for its bit pattern and not for finiteness, so a peer's
+/// archive can still carry a non-finite decimal past the constructor. Closing
+/// that needs a `bytecheck::Verify` impl, which is an `unsafe trait` this
+/// crate's `unsafe_code = "forbid"` does not admit; the gap is named here
+/// rather than left for someone to find. It is no wider than the `f64` the
+/// generated contracts carried before this type existed, which no reader
+/// refused at all.
 #[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct Decimal(f64);
 
 /// A value that is not a decimal refuses in the crate's own vocabulary,
