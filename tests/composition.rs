@@ -245,10 +245,11 @@ fn a_bare_string_keeps_its_separators_unless_the_run_would_swallow_its_context()
 
 proptest::proptest! {
     /// The build → print → parse direction, the one the ascent actually uses.
-    /// Backslashes are out of the alphabet until the protos writer escapes them.
+    /// The backslash is in the alphabet now that the protos writer escapes it
+    /// (protos 0.30.0).
     #[test]
     fn built_strings_round_trip_at_a_root_and_inside_a_variant(
-        value in "[a-zA-Z0-9 .!:;/«»(){}\\[\\]<>_-]{0,24}"
+        value in "[a-zA-Z0-9 .!:;/«»(){}\\[\\]<>_\\\\-]{0,24}"
     ) {
         let text = value.datomize(Path::new()).protosize().textualize();
         let composed: String = Potential::from(text.as_str())
