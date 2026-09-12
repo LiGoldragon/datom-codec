@@ -1,14 +1,17 @@
 #![allow(dead_code, non_camel_case_types, non_snake_case)]
+#[rustfmt::skip]
 pub trait DatomForming {
     fn datom_form(
         &self,
         input: crate::Path,
     ) -> std::result::Result<crate::Datom, crate::Error>;
 }
+#[rustfmt::skip]
 pub trait Datomizable {
     type Output;
     fn datomize(&self, input: crate::Path) -> Self::Output;
 }
+#[rustfmt::skip]
 pub trait Compositional {
     fn compose(
         input_0: crate::Datom,
@@ -17,11 +20,13 @@ pub trait Compositional {
     where
         Self: Sized;
 }
+#[rustfmt::skip]
 pub trait Composable {
     fn compose(&self, input: crate::Budget) -> std::result::Result<Self, crate::Error>
     where
         Self: Sized;
 }
+#[rustfmt::skip]
 pub trait Actualizing {
     fn actualize(
         &mut self,

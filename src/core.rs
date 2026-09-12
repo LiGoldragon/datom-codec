@@ -145,7 +145,6 @@ impl Pathing for Path {
 }
 
 pub struct Positions<'a> {
-    path: &'a Path,
     children: &'a [Datom],
     next: usize,
 }
@@ -153,15 +152,11 @@ pub trait Positioning {
     fn position<T: Compositional>(&mut self, budget: &mut Budget) -> Result<T, Error>;
 }
 impl Positioning for Positions<'_> {
+    /// `positions` validated the count before handing these out, so every
+    /// position it promised is there; asking past that arity is a mistake in
+    /// the caller, not a refusal the datum earned.
     fn position<T: Compositional>(&mut self, budget: &mut Budget) -> Result<T, Error> {
-        let child = self.children.get(self.next).ok_or_else(|| Error {
-            layer: ErrorLayer::Composition,
-            path: self.path.clone(),
-            kind: ErrorKind::Arity {
-                expected: self.next as Integer + 1,
-                found: self.children.len() as Integer,
-            },
-        })?;
+        let child = &self.children[self.next];
         self.next += 1;
         child.compose(budget)
     }
@@ -210,11 +205,7 @@ impl DatomPositioning for Datom {
                 },
             });
         }
-        Ok(Positions {
-            path: &self.path,
-            children,
-            next: 0,
-        })
+        Ok(Positions { children, next: 0 })
     }
 }
 impl Composable for Datom {

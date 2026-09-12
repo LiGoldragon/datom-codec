@@ -9,7 +9,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     ethos-zero = {
-      url = "github:LiGoldragon/ethos-zero/daf007296a19ad2f9c8a1e67e102b2e3f09db327";
+      url = "github:LiGoldragon/ethos-zero/da58504926dabe4680bb7863d812846b0f845d86";
     };
   };
 
