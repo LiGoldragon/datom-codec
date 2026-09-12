@@ -39,8 +39,14 @@ attributes, for any Rust struct or enum: field order is position order, a
 field's type is the position's type, a variant carrying nothing is its head
 alone, a single-field variant carries its type's own form, and a multi-field
 variant carries an inline struct. Hand-written impls are reserved to the
-intrinsics: `String`, `i64`, `f64`, `bool`, `Meaning`, `Vec`, `Option`,
+intrinsics: `String`, `i64`, `Decimal`, `bool`, `Meaning`, `Vec`, `Option`,
 `Result`, `Box`, the tuples, and the protos types the errors carry.
+
+`Decimal` is the finite decimal, and `f64` bears no datom kind. A datom
+decimal is finite and point-mandatory; a bare `f64` is neither, so it has no
+datom text and no position reads one back. `Decimal` holds its float privately
+and admits only a finite value, which is why it is `Eq`, `Hash` and `Ord` where
+`f64` is none of them.
 
 The datom composes; the type states its positions. A type whose form is a
 struct bears `Compositional`: it declares `ARITY` and builds itself from

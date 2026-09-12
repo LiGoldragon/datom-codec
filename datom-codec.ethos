@@ -19,7 +19,7 @@ Library
          Meaning.Opaque ]
   Budget.{ Integer ReaderBudget Integer Integer }
   ]
-[ Datomizable.{ [] [ Output ] [] [ datomize.{ [ Path ] [ Output ] } ] }
+[ Datomizable.[ datomize.{ [ Path ] [ Datom ] } ]
   Composing.[]
   Compositional.[]
   Composable.[] ]

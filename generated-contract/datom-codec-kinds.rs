@@ -8,8 +8,7 @@ pub trait DatomForming {
 }
 #[rustfmt::skip]
 pub trait Datomizable {
-    type Output;
-    fn datomize(&self, input: crate::Path) -> Self::Output;
+    fn datomize(&self, input: crate::Path) -> crate::Datom;
 }
 #[rustfmt::skip]
 pub trait Composing {

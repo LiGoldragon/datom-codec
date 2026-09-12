@@ -140,9 +140,11 @@ pub trait Compositional: Composing {
     const ARITY: Integer;
     fn from_positions(positions: Positions<'_>) -> Result<Self, Error>;
 }
+/// A composition becomes a datom. Infallible, and the only conversion
+/// this kind names: the descent `Protos -> Datom` is [`DatomForming`],
+/// which may fail and therefore is not this.
 pub trait Datomizable {
-    type Output;
-    fn datomize(&self, at: Path) -> Self::Output;
+    fn datomize(&self, at: Path) -> Datom;
 }
 pub trait Pathing {
     fn child(&self, index: Integer) -> Path;
@@ -249,7 +251,6 @@ impl Composable for Datom {
 }
 
 impl Datomizable for ErrorLayer {
-    type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         let name = match self {
             Self::Protos => "Protos",
@@ -289,7 +290,6 @@ impl Composing for ErrorLayer {
     }
 }
 impl Datomizable for ErrorKind {
-    type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         match self {
             Self::Budget => Datom {
@@ -368,7 +368,6 @@ impl Composing for ErrorKind {
     }
 }
 impl Datomizable for Error {
-    type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         Datom {
             path: at.child(1),
@@ -454,7 +453,7 @@ impl<T: Composing> Actualizing<T> for Potential<T> {
                 kind: ErrorKind::Structural(error),
             })?;
         self.reader = Some(protos.clone());
-        let datom = protos.datomize(Path::new())?;
+        let datom = crate::DatomForming::datom_form(&protos, Path::new())?;
         datom.compose(budget)
     }
 }

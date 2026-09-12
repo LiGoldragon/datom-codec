@@ -5,16 +5,14 @@
 use crate::*;
 
 impl<T: Datomizable> Datomizable for &T {
-    type Output = T::Output;
-    fn datomize(&self, at: Path) -> Self::Output {
+    fn datomize(&self, at: Path) -> Datom {
         (*self).datomize(at)
     }
 }
 
 macro_rules! positional_tuples {
     ($arity:literal, $($name:ident $index:tt),+) => {
-        impl<$($name: Datomizable<Output = Datom>),+> Datomizable for ($($name,)+) {
-            type Output = Datom;
+        impl<$($name: Datomizable),+> Datomizable for ($($name,)+) {
             fn datomize(&self, at: Path) -> Datom {
                 Datom {
                     path: at.clone(),

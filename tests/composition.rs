@@ -2,8 +2,8 @@
 //! positional decimal, error paths, and the bare-string rule.
 
 use datom_codec::{
-    Actualizing, Budget, Composable, Composing, Compositional, Datom, Datomizable, Error,
-    ErrorKind, ErrorLayer, Form, Path, Pathing, Potential,
+    Actualizing, Budget, Composable, Composing, Compositional, Datom, Datomizable, Decimal, Error,
+    ErrorKind, ErrorLayer, Form, NotFinite, Path, Pathing, Potential,
 };
 use protos::{Protosizable, ReaderBudget, Textualizable};
 
@@ -115,16 +115,16 @@ fn integers_refuse_a_leading_plus() {
 #[test]
 fn a_decimal_is_read_by_its_position_and_never_by_its_content() {
     assert_eq!(
-        Potential::<f64>::from("2.75")
+        Potential::<Decimal>::from("2.75")
             .actualize(&mut budget(4))
             .unwrap(),
-        2.75
+        Decimal::try_from(2.75).unwrap()
     );
     assert_eq!(
-        Potential::<f64>::from("-0.5")
+        Potential::<Decimal>::from("-0.5")
             .actualize(&mut budget(4))
             .unwrap(),
-        -0.5
+        Decimal::try_from(-0.5).unwrap()
     );
     assert_eq!(
         Potential::<String>::from("2.75")
@@ -135,7 +135,7 @@ fn a_decimal_is_read_by_its_position_and_never_by_its_content() {
     );
     for text in ["2.75.15", "1.x", "3.", "007.5"] {
         assert!(
-            Potential::<f64>::from(text)
+            Potential::<Decimal>::from(text)
                 .actualize(&mut budget(8))
                 .is_err(),
             "{text} is not a Decimal"
@@ -154,10 +154,12 @@ fn a_decimal_is_read_by_its_position_and_never_by_its_content() {
 }
 
 #[test]
-fn the_decimal_ascent_is_total_and_its_text_is_refused_on_the_way_back() {
-    for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-        let text = value.datomize(Path::new()).protosize().textualize();
-        let error = Potential::<f64>::from(text.as_str())
+fn text_for_a_non_finite_value_is_refused_as_a_decimal() {
+    // No writer of ours can produce these any more -- `Decimal` cannot hold a
+    // non-finite value -- but a peer's text is not ours, so the reader must
+    // still refuse them by name.
+    for text in ["NaN", "inf", "-inf"] {
+        let error = Potential::<Decimal>::from(text)
             .actualize(&mut budget(4))
             .unwrap_err();
         assert!(
@@ -165,11 +167,6 @@ fn the_decimal_ascent_is_total_and_its_text_is_refused_on_the_way_back() {
             "{text} refuses as a Decimal, got {error:?}"
         );
     }
-    assert_eq!(
-        3.0f64.datomize(Path::new()).protosize().textualize(),
-        "3.0",
-        "a finite decimal keeps its mandatory point"
-    );
 }
 
 #[test]
@@ -358,5 +355,47 @@ fn every_node_of_a_multi_field_variant_spends_the_composition_budget() {
             .actualize(&mut budget(4))
             .unwrap(),
         Shape::Pair(7, "seven".into())
+    );
+}
+
+#[test]
+fn a_decimal_holds_only_what_a_decimal_position_reads_back() {
+    // The defect this closes (substrate-review D4): `f64::datomize` wrote
+    // `NaN`, `inf` and `-inf` — text no Decimal position accepts — so the
+    // writer produced, silently, what the reader refused. A Decimal cannot
+    // hold such a value at all, so the writer can no longer be handed one.
+    for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert_eq!(
+            Decimal::try_from(value),
+            Err(NotFinite),
+            "{value} has no datom text and must not become a Decimal"
+        );
+    }
+    // And what a Decimal does hold makes the round trip whole: every value
+    // the ascent can write, the descent reads back as the same value.
+    for value in [0.0, -0.0, 2.75, -0.5, 3.0, 1000.0, -0.125] {
+        let decimal = Decimal::try_from(value).expect("a finite value is a Decimal");
+        let text = decimal.datomize(Path::new()).protosize().textualize();
+        assert_eq!(
+            Potential::<Decimal>::from(text.as_str())
+                .actualize(&mut budget(8))
+                .unwrap_or_else(|error| panic!("{text} refused: {error:?}")),
+            decimal,
+            "{text} must read back as the decimal that wrote it"
+        );
+    }
+    assert_eq!(
+        Decimal::try_from(3.0)
+            .unwrap()
+            .datomize(Path::new())
+            .protosize()
+            .textualize(),
+        "3.0",
+        "a whole-valued decimal keeps its mandatory point"
+    );
+    assert_eq!(
+        Decimal::try_from(-0.0).unwrap(),
+        Decimal::try_from(0.0).unwrap(),
+        "the sign of zero is not a distinction a decimal carries"
     );
 }

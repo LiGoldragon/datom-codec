@@ -129,9 +129,10 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
         for parameter in &input.generics.params {
             if let syn::GenericParam::Type(parameter) = parameter {
                 let ident = &parameter.ident;
-                bounded_generics.make_where_clause().predicates.push(
-                    syn::parse_quote!(#ident: ::datom_codec::Datomizable<Output = ::datom_codec::Datom>),
-                );
+                bounded_generics
+                    .make_where_clause()
+                    .predicates
+                    .push(syn::parse_quote!(#ident: ::datom_codec::Datomizable));
             }
         }
         let (impl_generics, ty_generics, where_clause) = bounded_generics.split_for_impl();
@@ -152,7 +153,6 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
         });
         return quote! {
             impl #impl_generics ::datom_codec::Datomizable for #name #ty_generics #where_clause {
-                type Output = ::datom_codec::Datom;
                 fn datomize(&self, at: ::datom_codec::Path) -> ::datom_codec::Datom {
                     use ::datom_codec::{Datomizable, Pathing};
                     match self { #(#arms),* }
@@ -169,9 +169,10 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
     for parameter in &input.generics.params {
         if let syn::GenericParam::Type(parameter) = parameter {
             let ident = &parameter.ident;
-            bounded_generics.make_where_clause().predicates.push(
-                syn::parse_quote!(#ident: ::datom_codec::Datomizable<Output = ::datom_codec::Datom>),
-            );
+            bounded_generics
+                .make_where_clause()
+                .predicates
+                .push(syn::parse_quote!(#ident: ::datom_codec::Datomizable));
         }
     }
     let (impl_generics, ty_generics, where_clause) = bounded_generics.split_for_impl();
@@ -191,7 +192,6 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
         .collect();
     quote! {
         impl #impl_generics ::datom_codec::Datomizable for #name #ty_generics #where_clause {
-            type Output = ::datom_codec::Datom;
             fn datomize(&self, at: ::datom_codec::Path) -> ::datom_codec::Datom {
                 use ::datom_codec::{Datomizable, Pathing};
                 ::datom_codec::Datom { path: at.clone(), form: ::datom_codec::Form::Struct(vec![#(#values),*]) }

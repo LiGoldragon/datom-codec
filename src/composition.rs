@@ -162,15 +162,7 @@ impl DatomForming for protos::Protos {
     }
 }
 
-impl Datomizable for protos::Protos {
-    type Output = Result<Datom, Error>;
-    fn datomize(&self, at: Path) -> Self::Output {
-        self.datom_form(at)
-    }
-}
-
 impl Datomizable for String {
-    type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         let separator = |character: char| matches!(character, '.' | '!' | ':');
         let delimited = self.is_empty()
@@ -277,7 +269,6 @@ impl BareStringComposing for Datom {
     }
 }
 impl Datomizable for i64 {
-    type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         Datom {
             path: at,
@@ -290,26 +281,7 @@ impl Composing for i64 {
         Self::scalar(datom, budget)
     }
 }
-impl Datomizable for f64 {
-    type Output = Datom;
-    fn datomize(&self, at: Path) -> Datom {
-        let mut text = self.to_string();
-        if self.is_finite() && !text.contains('.') {
-            text.push_str(".0");
-        }
-        Datom {
-            path: at,
-            form: Form::Bare(text),
-        }
-    }
-}
-impl Composing for f64 {
-    fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
-        Self::scalar(datom, budget)
-    }
-}
 impl Datomizable for bool {
-    type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         Datom {
             path: at,
@@ -323,8 +295,7 @@ impl Composing for bool {
     }
 }
 
-impl<T: Datomizable<Output = Datom>> Datomizable for Vec<T> {
-    type Output = Datom;
+impl<T: Datomizable> Datomizable for Vec<T> {
     fn datomize(&self, at: Path) -> Datom {
         Datom {
             path: at.clone(),
@@ -360,7 +331,6 @@ impl<T: Composing> Composing for Vec<T> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Meaning(pub Opaque);
 impl Datomizable for Meaning {
-    type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         Datom {
             path: at,
@@ -385,8 +355,7 @@ impl Composing for Meaning {
     }
 }
 
-impl<T: Datomizable<Output = Datom>> Datomizable for Box<T> {
-    type Output = Datom;
+impl<T: Datomizable> Datomizable for Box<T> {
     fn datomize(&self, at: Path) -> Datom {
         self.as_ref().datomize(at)
     }
@@ -428,8 +397,7 @@ impl Variantizing for Datom {
         }
     }
 }
-impl<T: Datomizable<Output = Datom>> Datomizable for Option<T> {
-    type Output = Datom;
+impl<T: Datomizable> Datomizable for Option<T> {
     fn datomize(&self, at: Path) -> Datom {
         match self {
             Some(value) => value
@@ -462,8 +430,7 @@ impl<T: Composing> Composing for Option<T> {
         }
     }
 }
-impl<T: Datomizable<Output = Datom>, E: Datomizable<Output = Datom>> Datomizable for Result<T, E> {
-    type Output = Datom;
+impl<T: Datomizable, E: Datomizable> Datomizable for Result<T, E> {
     fn datomize(&self, at: Path) -> Datom {
         match self {
             Ok(value) => value.datomize(at.child(1)).named_variant(at.clone(), "Ok"),
@@ -490,7 +457,6 @@ impl<T: Composing, E: Composing> Composing for Result<T, E> {
 }
 
 impl Datomizable for protos::Extent {
-    type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         Datom {
             path: at.child(1),
@@ -538,7 +504,6 @@ impl Composing for protos::Extent {
 }
 
 impl Datomizable for protos::Separator {
-    type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         let name = match self {
             Self::Period => "Period",
@@ -579,7 +544,6 @@ impl Composing for protos::Separator {
 }
 
 impl Datomizable for protos::Symbol {
-    type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         self.0.datomize(at)
     }
@@ -591,7 +555,6 @@ impl Composing for protos::Symbol {
 }
 
 impl Datomizable for protos::ReaderBudget {
-    type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         (self.remaining as Integer).datomize(at)
     }
@@ -613,7 +576,6 @@ impl Composing for protos::ReaderBudget {
 }
 
 impl Datomizable for protos::Problem {
-    type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         match self {
             Self::Empty
@@ -697,7 +659,6 @@ impl Composing for protos::Problem {
 }
 
 impl Datomizable for protos::Error {
-    type Output = Datom;
     fn datomize(&self, at: Path) -> Datom {
         Datom {
             path: at.child(1),
@@ -816,61 +777,5 @@ impl Scalar for bool {
                 },
             }),
         }
-    }
-}
-impl Scalar for f64 {
-    fn scalar(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
-        budget.spend(&datom.path)?;
-        let text = match &datom.form {
-            Form::Bare(value) => value.clone(),
-            Form::Variant(whole, fraction) => {
-                budget.spend(&fraction.path)?;
-                match &fraction.form {
-                    Form::Bare(fraction) => format!("{}.{}", whole.0, fraction),
-                    found => {
-                        return Err(Error {
-                            layer: ErrorLayer::Composition,
-                            path: fraction.path.clone(),
-                            kind: ErrorKind::Form {
-                                expected: "Bare".into(),
-                                found: found.form_name().to_owned(),
-                            },
-                        });
-                    }
-                }
-            }
-            found => {
-                return Err(Error {
-                    layer: ErrorLayer::Composition,
-                    path: datom.path.clone(),
-                    kind: ErrorKind::Form {
-                        expected: "Bare".into(),
-                        found: found.form_name().to_owned(),
-                    },
-                });
-            }
-        };
-        let refusal = || Error {
-            layer: ErrorLayer::Composition,
-            path: datom.path.clone(),
-            kind: ErrorKind::Value {
-                expected: "Decimal".into(),
-                value: text.clone(),
-            },
-        };
-        let (whole, fraction) = text.split_once('.').ok_or_else(refusal)?;
-        let digits = whole.strip_prefix('-').unwrap_or(whole);
-        let canonical = !digits.is_empty()
-            && digits.chars().all(|character| character.is_ascii_digit())
-            && (digits.len() == 1 || !digits.starts_with('0'))
-            && !fraction.is_empty()
-            && fraction.chars().all(|character| character.is_ascii_digit());
-        if !canonical {
-            return Err(refusal());
-        }
-        text.parse::<f64>()
-            .ok()
-            .filter(|value| value.is_finite())
-            .ok_or_else(refusal)
     }
 }

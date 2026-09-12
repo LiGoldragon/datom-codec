@@ -5,7 +5,7 @@ Library
 [ crate:[ Datom Budget Error Form Path Positions Potential ] ]
 []
 [ DatomForming.[ datom_form.{ [ Path ] [ Result<Datom Error> ] } ]
-  Datomizable.{ [] [ Output ] [] [ datomize.{ [ Path ] [ Output ] } ] }
+  Datomizable.[ datomize.{ [ Path ] [ Datom ] } ]
   Composing.[ compose:{ [ Datom Budget ] [ Result<Self Error> ] } ]
   Compositional.{ [ Composing ] [] [ ARITY.Integer ] [ from_positions:{ [ Positions ] [ Result<Self Error> ] } ] }
   Composable.[ compose.{ [ Budget ] [ Result<Self Error> ] }

@@ -1,6 +1,7 @@
 use datom_codec::{
-    Actualizing, Budget, Composable, Composing, Datom, Datomizable, Error, ErrorKind, ErrorLayer,
-    ErrorRaising, Form, Meaning, Path, Potential, PotentialExtenting, ProtosExtenting, Scalar,
+    Actualizing, Budget, Composable, Composing, Datom, DatomForming, Datomizable, Decimal, Error,
+    ErrorKind, ErrorLayer, ErrorRaising, Form, Meaning, Path, Potential, PotentialExtenting,
+    ProtosExtenting, Scalar,
 };
 use protos::{Protosizable, ReaderBudget, Textualizable};
 
@@ -159,8 +160,14 @@ fn derived_variants_use_their_rust_names_as_heads() {
 
 #[test]
 fn scalar_writers_preserve_their_textual_kind() {
-    assert_eq!(3.0_f64.datomize(vec![]).protosize().textualize(), "3.0");
-    assert_eq!((-0.0_f64).datomize(vec![]).protosize().textualize(), "-0.0");
+    let three: Decimal = 3.0.try_into().unwrap();
+    assert_eq!(three.datomize(vec![]).protosize().textualize(), "3.0");
+    let negative_zero: Decimal = (-0.0).try_into().unwrap();
+    assert_eq!(
+        negative_zero.datomize(vec![]).protosize().textualize(),
+        "0.0",
+        "a decimal carries no sign of zero, so there is one text for it"
+    );
     assert_eq!(
         "a{b".to_owned().datomize(vec![]).protosize().textualize(),
         "«a{b»"
@@ -216,7 +223,7 @@ fn protos_conversion_preserves_datoms_and_canonical_text() {
     let text = datom.protosize().textualize();
     assert_eq!(text, "{ Ada 42 True }");
     assert_eq!(datom.protosize(), text.protosize().unwrap());
-    let rebuilt = text.protosize().unwrap().datomize(vec![]);
+    let rebuilt = text.protosize().unwrap().datom_form(vec![]);
     assert_eq!(rebuilt.unwrap(), datom);
 }
 
@@ -242,7 +249,7 @@ fn potential_actualizes_text_through_protos_and_datom() {
 
 #[test]
 fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
-    let three_point_fourteen: f64 = "3.14".parse().unwrap();
+    let three_point_fourteen: Decimal = "3.14".parse().unwrap();
     let timestamp: String = Potential::from("2026-09-03T17:46:20")
         .actualize(&mut Budget {
             remaining: 1,
@@ -280,7 +287,7 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
         })
         .unwrap();
     assert_eq!(integer, Some(42));
-    let decimal: f64 = Potential::from("3.14")
+    let decimal: Decimal = Potential::from("3.14")
         .actualize(&mut Budget {
             remaining: 2,
             reader: ReaderBudget { remaining: 128 },
@@ -289,7 +296,7 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
         })
         .unwrap();
     assert_eq!(decimal, three_point_fourteen);
-    let optional_decimal: Option<f64> = Potential::from("Some.3.14")
+    let optional_decimal: Option<Decimal> = Potential::from("Some.3.14")
         .actualize(&mut Budget {
             remaining: 3,
             reader: ReaderBudget { remaining: 128 },
@@ -979,7 +986,7 @@ fn manually_built_hundred_thousand_deep_protos_refuses_or_forms_without_recursio
         };
     }
     let error = protos
-        .datomize(vec![])
+        .datom_form(vec![])
         .expect_err("manual headed tree reaches the typed depth refusal");
     assert_eq!(error.kind, ErrorKind::Budget);
     drop(protos);

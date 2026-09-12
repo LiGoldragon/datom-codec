@@ -6,19 +6,19 @@ pub type Opaque = String;
 #[rustfmt::skip]
 pub type Meaning = String;
 #[rustfmt::skip]
-#[derive(datom_codec::Datomizable, datom_codec::Compositional, Clone, Debug, PartialEq)]
+#[derive(datom_codec::Datomizable, datom_codec::Composing, Clone, Debug, PartialEq)]
 pub struct FormVariant {
     pub symbol: protos::Symbol,
     pub datom: std::boxed::Box<Datom>,
 }
 #[rustfmt::skip]
-#[derive(datom_codec::Datomizable, datom_codec::Compositional, Clone, Debug, PartialEq)]
+#[derive(datom_codec::Datomizable, datom_codec::Composing, Clone, Debug, PartialEq)]
 pub struct Datom {
     pub path: Path,
     pub form: std::boxed::Box<Form>,
 }
 #[rustfmt::skip]
-#[derive(datom_codec::Datomizable, datom_codec::Compositional, Clone, Debug, PartialEq)]
+#[derive(datom_codec::Datomizable, datom_codec::Composing, Clone, Debug, PartialEq)]
 pub enum Form {
     Struct(std::vec::Vec<Datom>),
     Vector(std::vec::Vec<Datom>),
@@ -28,7 +28,7 @@ pub enum Form {
     Meaning(Opaque),
 }
 #[rustfmt::skip]
-#[derive(datom_codec::Datomizable, datom_codec::Compositional, Clone, Debug, PartialEq)]
+#[derive(datom_codec::Datomizable, datom_codec::Composing, Clone, Debug, PartialEq)]
 pub struct Budget {
     pub first_integer: i64,
     pub reader_budget: protos::ReaderBudget,
@@ -37,8 +37,7 @@ pub struct Budget {
 }
 #[rustfmt::skip]
 pub trait Datomizable {
-    type Output;
-    fn datomize(&self, input: Path) -> Self::Output;
+    fn datomize(&self, input: Path) -> Datom;
 }
 #[rustfmt::skip]
 pub trait Composing {}

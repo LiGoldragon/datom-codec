@@ -11,6 +11,7 @@
 
 mod composition;
 mod core;
+mod decimal;
 mod dropping;
 mod positional;
 mod projection;
@@ -21,6 +22,7 @@ pub use core::{
     Datom, DatomPositioning, Datomizable, Error, ErrorKind, ErrorLayer, ErrorRaising, Form, Naming,
     Pathing, Positioning, Positions, Potential, PotentialExtenting, ProtosExtenting,
 };
+pub use decimal::{Decimal, Decimating, NotFinite};
 pub use derive::{Composing, Datomizable};
 pub use protos::Symbol;
 pub type Integer = i64;
