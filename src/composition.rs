@@ -328,7 +328,14 @@ impl<T: Composing> Composing for Vec<T> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A parenthesized text. Like [`crate::Decimal`], it is an intrinsic-backing
+/// type a Signal position can hold, so it archives behind the `rkyv` feature
+/// and bears the derives a generated contract now carries unconditionally.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct Meaning(pub Opaque);
 impl Datomizable for Meaning {
     fn datomize(&self, at: Path) -> Datom {
