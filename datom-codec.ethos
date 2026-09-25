@@ -8,7 +8,6 @@ Library
 [ protos:[ Extent Protos ReaderBudget Separator Symbol ] ]
 [ Path.Vector<Integer>
   Opaque.String
-  Meaning.String
   FormVariant.{ Symbol Datom }
   Datom.{ Path Form }
   Form.[ Struct.Vector<Datom>
