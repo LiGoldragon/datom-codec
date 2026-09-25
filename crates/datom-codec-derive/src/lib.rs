@@ -40,7 +40,7 @@ pub fn composing(input: TokenStream) -> TokenStream {
             };
             let spelling = variant.ident.to_string();
             let name = &variant.ident;
-            Some(quote!(#spelling => Ok(Self::#name #build)))
+            Some(quote!(#spelling => ::std::result::Result::Ok(Self::#name #build)))
         });
         let arms = data.variants.iter().filter(|variant| !variant.fields.is_empty()).map(|variant| {
             let variant_name = &variant.ident;
@@ -51,19 +51,19 @@ pub fn composing(input: TokenStream) -> TokenStream {
             let count = fields.len();
             if count == 1 {
                 let binding = &bindings[0];
-                quote!(#spelling => { let #binding = body.compose(budget)?; Ok(#build) })
+                quote!(#spelling => { let #binding = body.compose(budget)?; ::std::result::Result::Ok(#build) })
             } else {
                 let types = fields.iter().map(|field| &field.ty);
-                quote!(#spelling => { let (#(#bindings),*) = ::datom_codec::Composable::compose_positions::<(#(#types,)*)>(body, budget)?; Ok(#build) })
+                quote!(#spelling => { let (#(#bindings),*) = ::datom_codec::Composable::compose_positions::<(#(#types,)*)>(body, budget)?; ::std::result::Result::Ok(#build) })
             }
         });
         return quote! {
             impl #impl_generics ::datom_codec::Composing for #name #ty_generics #where_clause {
-                fn compose(datom: &::datom_codec::Datom, budget: &mut ::datom_codec::Budget) -> Result<Self, ::datom_codec::Error> {
+                fn compose(datom: &::datom_codec::Datom, budget: &mut ::datom_codec::Budget) -> ::std::result::Result<Self, ::datom_codec::Error> {
                     use ::datom_codec::{Budgeting, Composable, Variantizing};
                     match &datom.form {
-                        ::datom_codec::Form::Bare(head) => { budget.spend(&datom.path)?; match head.as_str() { #(#unit_arms,)* other => Err(<::datom_codec::Error as ::datom_codec::ErrorRaising>::composition(datom.path.clone(), ::datom_codec::ErrorKind::Variant { expected: stringify!(#name).to_owned(), found: other.to_owned() })) } },
-                        _ => { let (head, body) = datom.variant(budget, "Variant")?; match head { #(#arms,)* other => Err(<::datom_codec::Error as ::datom_codec::ErrorRaising>::composition(datom.path.clone(), ::datom_codec::ErrorKind::Variant { expected: stringify!(#name).to_owned(), found: other.to_owned() })) } }
+                        ::datom_codec::Form::Bare(head) => { budget.spend(&datom.path)?; match head.as_str() { #(#unit_arms,)* other => ::std::result::Result::Err(<::datom_codec::Error as ::datom_codec::ErrorRaising>::composition(datom.path.clone(), ::datom_codec::ErrorKind::Variant { expected: stringify!(#name).to_owned(), found: other.to_owned() })) } },
+                        _ => { let (head, body) = datom.variant(budget, "Variant")?; match head { #(#arms,)* other => ::std::result::Result::Err(<::datom_codec::Error as ::datom_codec::ErrorRaising>::composition(datom.path.clone(), ::datom_codec::ErrorKind::Variant { expected: stringify!(#name).to_owned(), found: other.to_owned() })) } }
                     }
                 }
             }
@@ -107,13 +107,13 @@ pub fn composing(input: TokenStream) -> TokenStream {
     quote! {
         impl #impl_generics ::datom_codec::Compositional for #name #ty_generics #where_clause {
             const ARITY: ::datom_codec::Integer = #arity as ::datom_codec::Integer;
-            fn from_positions(mut positions: ::datom_codec::Positions<'_>) -> Result<Self, ::datom_codec::Error> {
+            fn from_positions(mut positions: ::datom_codec::Positions<'_>) -> ::std::result::Result<Self, ::datom_codec::Error> {
                 use ::datom_codec::Positioning;
-                #(#reads)* Ok(#build)
+                #(#reads)* ::std::result::Result::Ok(#build)
             }
         }
         impl #impl_generics ::datom_codec::Composing for #name #ty_generics #where_clause {
-            fn compose(datom: &::datom_codec::Datom, budget: &mut ::datom_codec::Budget) -> Result<Self, ::datom_codec::Error> {
+            fn compose(datom: &::datom_codec::Datom, budget: &mut ::datom_codec::Budget) -> ::std::result::Result<Self, ::datom_codec::Error> {
                 ::datom_codec::Composable::compose_positions(datom, budget)
             }
         }
@@ -148,7 +148,7 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
             if variant.fields.is_empty() {
                 quote!(#pattern => ::datom_codec::Datom { path: at.clone(), form: ::datom_codec::Form::Bare(#spelling.to_owned()) })
             } else {
-                quote!(#pattern => ::datom_codec::Datom { path: at.clone(), form: ::datom_codec::Form::Variant(::datom_codec::Symbol(#spelling.to_owned()), Box::new(#body)) })
+                quote!(#pattern => ::datom_codec::Datom { path: at.clone(), form: ::datom_codec::Form::Variant(::datom_codec::Symbol(#spelling.to_owned()), ::std::boxed::Box::new(#body)) })
             }
         });
         return quote! {
@@ -194,7 +194,7 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
         impl #impl_generics ::datom_codec::Datomizable for #name #ty_generics #where_clause {
             fn datomize(&self, at: ::datom_codec::Path) -> ::datom_codec::Datom {
                 use ::datom_codec::{Datomizable, Pathing};
-                ::datom_codec::Datom { path: at.clone(), form: ::datom_codec::Form::Struct(vec![#(#values),*]) }
+                ::datom_codec::Datom { path: at.clone(), form: ::datom_codec::Form::Struct(::std::vec![#(#values),*]) }
             }
         }
     }.into()
