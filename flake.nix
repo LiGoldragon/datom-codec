@@ -8,12 +8,9 @@
       url = "github:LiGoldragon/rust-build";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    ethos-zero = {
-      url = "github:LiGoldragon/ethos-zero/b232d35e03011161fe7ec9129ad99a9914413348";
-    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-build, ethos-zero }:
+  outputs = { self, nixpkgs, flake-utils, rust-build }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -58,16 +55,6 @@
             fi
             touch $out
           '';
-          generated-contract = pkgs.runCommand "datom-codec-generated-contract" {
-            generator = ethos-zero.packages.${system}.default;
-            declaration = ./datom-codec.ethos;
-            committed = ./generated-contract/datom-codec.rs;
-          } (builtins.readFile ./checks/generated-contract.sh);
-          generated-kinds-contract = pkgs.runCommand "datom-codec-generated-kinds-contract" {
-            generator = ethos-zero.packages.${system}.default;
-            declaration = ./datom-codec-kinds.ethos;
-            committed = ./generated-contract/datom-codec-kinds.rs;
-          } (builtins.readFile ./checks/generated-contract.sh);
           doc = craneLib.cargoDoc (commonArguments // {
             inherit cargoArtifacts;
             RUSTDOCFLAGS = "-D warnings";

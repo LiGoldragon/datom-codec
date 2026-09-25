@@ -94,5 +94,12 @@ variant included.
 | `dropping` | iterative drop of the datom tree |
 
 No free functions, no inherent impls, no zero-sized bearers: `nix flake check`
-carries the guards, with build, test, fmt, clippy, doc and the generated
-contract. Every walk is iterative.
+carries the guards, with build, test, fmt, clippy and doc. Every walk is
+iterative.
+
+`datom-codec.ethos` and `datom-codec-kinds.ethos` state the datom anatomy of the
+public types and kinds; no Rust is generated from them. The crate is
+hand-written because Ethos cannot yet state borrowed receivers, generic
+capabilities such as `compose<T: Composing>`, or a kind with a parameter such
+as `Actualizing<T>`, and because a generated `Datom` would derive onto itself
+the kinds that read it.
