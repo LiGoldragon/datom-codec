@@ -63,6 +63,10 @@
             declaration = ./datom-codec-kinds.ethos;
             committed = ./generated/datom-codec-kinds.rs;
           } (builtins.readFile ./checks/generated-kinds.sh);
+          checked-anatomy = pkgs.runCommand "datom-codec-checked-anatomy" {
+            generator = ethos-zero.packages.${system}.default;
+            declaration = ./datom-codec.ethos;
+          } (builtins.readFile ./checks/checked-anatomy.sh);
           doc = craneLib.cargoDoc (commonArguments // {
             inherit cargoArtifacts;
             RUSTDOCFLAGS = "-D warnings";

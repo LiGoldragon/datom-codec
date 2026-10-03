@@ -108,4 +108,6 @@ its Rust is generated into `generated/datom-codec-kinds.rs` and committed:
 `tests/kinds.rs` compiles it against this crate's types, the generated
 associations asserting that each type bears its kind, and the `generated-kinds`
 Nix check regenerates it with the pinned ethos-zero and holds the committed file
-to it.
+to it. The `checked-anatomy` check holds `datom-codec.ethos` to the same
+ethos-zero; its kinds section is empty, the kinds having their one home in the
+kinds file.

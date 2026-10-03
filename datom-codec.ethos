@@ -4,6 +4,7 @@
 ; tuple wrapper is not a distinct Ethos declaration form. Error is omitted:
 ; its unit Datom layer collides with the defined Datom type under Ethos's
 ; named-type-variant rule, so a declaration would falsely give that unit data.
+; The kinds have their one home in datom-codec-kinds.ethos.
 Library
 [ protos:[ Extent Protos ReaderBudget Separator Symbol ] ]
 [ Path.Vector<Integer>
@@ -16,10 +17,6 @@ Library
          Bare.String
          String.String
          Meaning.Opaque ]
-  Budget.{ Integer ReaderBudget Integer Integer }
-  ]
-[ Datomizable.[ datomize.{ [ Path ] [ Datom ] } ]
-  Composing.[]
-  Compositional.[]
-  Composable.[] ]
+  Budget.{ Integer ReaderBudget Integer Integer } ]
+[]
 []
