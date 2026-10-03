@@ -1,6 +1,6 @@
 [package]
 name        = "datom-codec"
-version     = "0.32.1"
+version     = "0.32.2"
 edition     = "2024"
 rust-version = "1.85"
 license     = "MIT OR Apache-2.0"
@@ -12,18 +12,25 @@ publish     = false
 members = ["crates/datom-codec-derive"]
 
 [features]
-# A Signal contract archives its types. `Decimal` is the one intrinsic-backing
-# type this crate owns that a Signal position can hold, so its rkyv derives
-# live behind this feature and the Nexus enables it without enabling `datom`.
-rkyv = ["dep:rkyv"]
+# Every generated ethos contract archives its types. `Decimal` and `Meaning`
+# back intrinsics, and `Error` is what a contract holds where a datom reading
+# fails, so their rkyv derives live behind this feature, which also archives
+# the protos error an `Error` carries. A Nexus enables it without enabling
+# its contract's `datom` feature.
+rkyv = ["dep:rkyv", "protos/rkyv"]
 
 [dependencies]
 rkyv = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"], optional = true }
-protos = { git = "https://github.com/LiGoldragon/protos", rev = "109797e9d81799630e981d214df49bbba1ed934f" }
+protos = { git = "https://github.com/LiGoldragon/protos", rev = "15b41da8f2579e73ead59bc0c2b97529b8ac32d3" }
 derive = { package = "datom-codec-derive", path = "crates/datom-codec-derive" }
 
 [dev-dependencies]
 proptest = "1.6"
+
+[[test]]
+name = "archival"
+path = "tests/archival.rs"
+required-features = ["rkyv"]
 
 [lib]
 name = "datom_codec"

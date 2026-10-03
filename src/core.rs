@@ -65,12 +65,20 @@ impl CompositionDepthing for Budget {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum ErrorLayer {
     Protos,
     Datom,
     Composition,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct Error {
     pub layer: ErrorLayer,
     pub path: Path,
@@ -89,6 +97,10 @@ impl ErrorRaising for Error {
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum ErrorKind {
     Budget,
     Structural(protos::Error),

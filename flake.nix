@@ -30,6 +30,10 @@
         checks = {
           build = craneLib.cargoBuild (commonArguments // { inherit cargoArtifacts; });
           test = craneLib.cargoTest (commonArguments // { inherit cargoArtifacts; });
+          archival = craneLib.cargoTest (commonArguments // {
+            inherit cargoArtifacts;
+            cargoExtraArgs = "--locked --features rkyv";
+          });
           no-production-free-functions = pkgs.runCommand "datom-codec-no-production-free-functions" { } ''
             if grep -R -n -E '^(pub(\([^)]*\))? )?fn ' ${src}/src; then
               echo "production Rust must not use module-level free functions" >&2
