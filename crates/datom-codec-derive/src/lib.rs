@@ -60,7 +60,7 @@ pub fn composing(input: TokenStream) -> TokenStream {
         return quote! {
             impl #impl_generics ::datom_codec::Composing for #name #ty_generics #where_clause {
                 fn compose(datom: &::datom_codec::Datom, budget: &mut ::datom_codec::Budget) -> ::std::result::Result<Self, ::datom_codec::Error> {
-                    use ::datom_codec::{Budgeting, Composable, Variantizing};
+                    use ::datom_codec::{Budgeted, Composable, Variantizing};
                     match &datom.form {
                         ::datom_codec::Form::Bare(head) => { budget.spend(&datom.path)?; match head.as_str() { #(#unit_arms,)* other => ::std::result::Result::Err(<::datom_codec::Error as ::datom_codec::ErrorRaising>::composition(datom.path.clone(), ::datom_codec::ErrorKind::Variant { expected: stringify!(#name).to_owned(), found: other.to_owned() })) } },
                         _ => { let (head, body) = datom.variant(budget, "Variant")?; match head { #(#arms,)* other => ::std::result::Result::Err(<::datom_codec::Error as ::datom_codec::ErrorRaising>::composition(datom.path.clone(), ::datom_codec::ErrorKind::Variant { expected: stringify!(#name).to_owned(), found: other.to_owned() })) } }
@@ -108,7 +108,7 @@ pub fn composing(input: TokenStream) -> TokenStream {
         impl #impl_generics ::datom_codec::Compositional for #name #ty_generics #where_clause {
             const ARITY: ::datom_codec::Integer = #arity as ::datom_codec::Integer;
             fn from_positions(mut positions: ::datom_codec::Positions<'_>) -> ::std::result::Result<Self, ::datom_codec::Error> {
-                use ::datom_codec::Positioning;
+                use ::datom_codec::Positional;
                 #(#reads)* ::std::result::Result::Ok(#build)
             }
         }
@@ -154,7 +154,7 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
         return quote! {
             impl #impl_generics ::datom_codec::Datomizable for #name #ty_generics #where_clause {
                 fn datomize(&self, at: ::datom_codec::Path) -> ::datom_codec::Datom {
-                    use ::datom_codec::{Datomizable, Pathing};
+                    use ::datom_codec::{Datomizable, Branchable};
                     match self { #(#arms),* }
                 }
             }
@@ -193,7 +193,7 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
     quote! {
         impl #impl_generics ::datom_codec::Datomizable for #name #ty_generics #where_clause {
             fn datomize(&self, at: ::datom_codec::Path) -> ::datom_codec::Datom {
-                use ::datom_codec::{Datomizable, Pathing};
+                use ::datom_codec::{Datomizable, Branchable};
                 ::datom_codec::Datom { path: at.clone(), form: ::datom_codec::Form::Struct(::std::vec![#(#values),*]) }
             }
         }

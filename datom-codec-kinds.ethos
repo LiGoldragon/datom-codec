@@ -1,14 +1,32 @@
-; Datom's representable public conversion kinds. Borrowed reader handles and
-; operational helper kinds remain Rust implementation surface until Ethos has
-; declarations for their references and unit-yield capabilities.
+; Datom's representable public conversion kinds. A capability's input is a
+; kind: a path is Branchable, a budget Budgeted, the positions of a struct form
+; Positional, and a datom Composable. Their own capabilities (a child at an
+; Integer index, a unit-yield spend, a position read as any Composing) remain
+; Rust implementation surface until Ethos can state them.
 Library
 [ crate:[ Datom Budget Error Form Path Positions Potential ] ]
 []
-[ DatomForming.[ datom_form.{ [ Path ] [ Result<Datom Error> ] } ]
-  Datomizable.[ datomize.{ [ Path ] [ Datom ] } ]
-  Composing.[ compose:{ [ Datom Budget ] [ Result<Self Error> ] } ]
-  Compositional.{ [ Composing ] [] [ ARITY.Integer ] [ from_positions:{ [ Positions ] [ Result<Self Error> ] } ] }
-  Composable.[ compose.{ [ Budget ] [ Result<Self Error> ] }
-               compose_positions.{ [ Budget ] [ Result<Self Error> ] } ]
-  Actualizing.[ actualize!{ [ Budget ] [ Result<Self Error> ] } ] ]
-[]
+[ Branchable.[]
+  Budgeted.[]
+  Positional.[]
+  DatomForming.[ datom_form.{ [ Branchable ]
+                              [ Result<Datom Error> ] } ]
+  Datomizable.[ datomize.{ [ Branchable ]
+                           [ Datom ] } ]
+  Composing.[ compose:{ [ Composable Budgeted ]
+                        [ Result<Self Error> ] } ]
+  Compositional.{ [ Composing ]
+                  []
+                  [ ARITY.Integer ]
+                  [ from_positions:{ [ Positional ]
+                                     [ Result<Self Error> ] } ] }
+  Composable.[ compose.{ [ Budgeted ]
+                         [ Result<Self Error> ] }
+               compose_positions.{ [ Budgeted ]
+                                   [ Result<Self Error> ] } ]
+  Actualizing.[ actualize!{ [ Budgeted ]
+                            [ Result<Self Error> ] } ] ]
+[ Path.[ Branchable ]
+  Budget.[ Budgeted ]
+  Positions.[ Positional ]
+  Datom.[ Composable ] ]

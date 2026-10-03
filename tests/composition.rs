@@ -2,8 +2,8 @@
 //! positional decimal, error paths, and the bare-string rule.
 
 use datom_codec::{
-    Actualizing, Budget, Composable, Composing, Compositional, Datom, Datomizable, Decimal, Error,
-    ErrorKind, ErrorLayer, Form, Path, Pathing, Potential,
+    Actualizing, Branchable, Budget, Composable, Composing, Compositional, Datom, Datomizable,
+    Decimal, Error, ErrorKind, ErrorLayer, Form, Path, Potential,
 };
 use protos::{Protosizable, ReaderBudget, Textualizable};
 

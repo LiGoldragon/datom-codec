@@ -1,6 +1,6 @@
 [package]
 name        = "datom-codec"
-version     = "0.31.1"
+version     = "0.32.0"
 edition     = "2024"
 rust-version = "1.85"
 license     = "MIT OR Apache-2.0"
@@ -19,7 +19,7 @@ rkyv = ["dep:rkyv"]
 
 [dependencies]
 rkyv = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"], optional = true }
-protos = { git = "https://github.com/LiGoldragon/protos", rev = "1febca7836bf8d5f5973a302fdd50aa9c84c159b" }
+protos = { git = "https://github.com/LiGoldragon/protos", rev = "1cf4e63d89cdbd8e6decfc99eac3b78209b6fd8f" }
 derive = { package = "datom-codec-derive", path = "crates/datom-codec-derive" }
 
 [dev-dependencies]

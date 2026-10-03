@@ -29,14 +29,15 @@ pub struct Budget {
     pub maximum_depth: Integer,
 }
 
-pub trait Budgeting {
+/// What composing spends from, a step at a time, each step at a path.
+pub trait Budgeted {
     fn spend(&mut self, path: &Path) -> Result<(), Error>;
 }
 pub trait CompositionDepthing {
     fn enter_composition(&mut self, path: &Path) -> Result<(), Error>;
     fn leave_composition(&mut self);
 }
-impl Budgeting for Budget {
+impl Budgeted for Budget {
     fn spend(&mut self, path: &Path) -> Result<(), Error> {
         if self.remaining <= 0 {
             return Err(Error {
@@ -146,10 +147,11 @@ pub trait Compositional: Composing {
 pub trait Datomizable {
     fn datomize(&self, at: Path) -> Datom;
 }
-pub trait Pathing {
+/// A datom's place in its tree, which branches to its children's places.
+pub trait Branchable {
     fn child(&self, index: Integer) -> Path;
 }
-impl Pathing for Path {
+impl Branchable for Path {
     fn child(&self, index: Integer) -> Path {
         let mut child = self.clone();
         child.push(index);
@@ -163,10 +165,11 @@ pub struct Positions<'a> {
     next: usize,
     budget: &'a mut Budget,
 }
-pub trait Positioning {
+/// The positions of one struct form, read one after another.
+pub trait Positional {
     fn position<T: Composing>(&mut self) -> Result<T, Error>;
 }
-impl Positioning for Positions<'_> {
+impl Positional for Positions<'_> {
     /// `positions` validated the count before handing these out, so every
     /// position it promised is there; asking past that arity is a mistake in
     /// the caller, not a refusal the datum earned.

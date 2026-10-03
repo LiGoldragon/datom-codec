@@ -991,3 +991,43 @@ fn manually_built_hundred_thousand_deep_protos_refuses_or_forms_without_recursio
     assert_eq!(error.kind, ErrorKind::Budget);
     drop(protos);
 }
+
+/// A projected tree carries the extents of the text it prints, and that text
+/// is the vertical canonical print: reading the text back gives the projected
+/// tree, extents included.
+#[test]
+fn nested_projection_carries_the_extents_of_its_vertical_print() {
+    let datom = Datom {
+        path: vec![],
+        form: Form::Variant(
+            protos::Symbol("Locked".into()),
+            Box::new(Datom {
+                path: vec![1],
+                form: Form::Struct(vec![
+                    Datom {
+                        path: vec![1, 0],
+                        form: Form::Bare("442".into()),
+                    },
+                    Datom {
+                        path: vec![1, 1],
+                        form: Form::Vector(vec![Datom {
+                            path: vec![1, 1, 0],
+                            form: Form::Bare("/abs".into()),
+                        }]),
+                    },
+                    Datom {
+                        path: vec![1, 2],
+                        form: Form::String("why I hold it".into()),
+                    },
+                ]),
+            }),
+        ),
+    };
+    let projected = datom.protosize();
+    let text = projected.textualize();
+    assert_eq!(
+        text,
+        "Locked.{ 442\n         [ /abs ]\n         «why I hold it» }"
+    );
+    assert_eq!(text.protosize(), Ok(projected));
+}

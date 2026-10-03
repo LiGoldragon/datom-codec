@@ -18,9 +18,10 @@ mod projection;
 
 pub use composition::{DatomForming, Meaning, Scalar, Variantizing};
 pub use core::{
-    Actualizing, Budget, Budgeting, Composable, Composing, CompositionDepthing, Compositional,
-    Datom, DatomPositioning, Datomizable, Error, ErrorKind, ErrorLayer, ErrorRaising, Form, Naming,
-    Pathing, Positioning, Positions, Potential, PotentialExtenting, ProtosExtenting,
+    Actualizing, Branchable, Budget, Budgeted, Composable, Composing, CompositionDepthing,
+    Compositional, Datom, DatomPositioning, Datomizable, Error, ErrorKind, ErrorLayer,
+    ErrorRaising, Form, Naming, Positional, Positions, Potential, PotentialExtenting,
+    ProtosExtenting,
 };
 pub use decimal::{Decimal, DecimalRefusing, Decimating};
 pub use derive::{Composing, Datomizable};

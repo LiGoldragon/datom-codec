@@ -90,7 +90,7 @@ variant included.
 |---|---|
 | `core` | the datom, the budget, the errors, the kinds, `Potential` |
 | `composition` | protos to datom, the intrinsics, the scalars |
-| `projection` | datom to protos; the writer computes the extents |
+| `projection` | datom to protos; protos assigns the extents of its canonical print |
 | `dropping` | iterative drop of the datom tree |
 
 No free functions, no inherent impls, no zero-sized bearers: `nix flake check`
@@ -98,8 +98,14 @@ carries the guards, with build, test, fmt, clippy and doc. Every walk is
 iterative.
 
 `datom-codec.ethos` and `datom-codec-kinds.ethos` state the datom anatomy of the
-public types and kinds; no Rust is generated from them. The crate is
-hand-written because Ethos cannot yet state borrowed receivers, generic
-capabilities such as `compose<T: Composing>`, or a kind with a parameter such
-as `Actualizing<T>`, and because a generated `Datom` would derive onto itself
-the kinds that read it.
+public types and kinds. The crate is hand-written because Ethos cannot yet state
+borrowed receivers, generic capabilities such as `compose<T: Composing>`, or a
+kind with a parameter such as `Actualizing<T>`, and because a generated `Datom`
+would derive onto itself the kinds that read it. A capability's input is a kind:
+a `Path` is `Branchable`, a `Budget` `Budgeted`, the `Positions` of a struct form
+`Positional`, and a `Datom` `Composable`. The kinds file declares only kinds, so
+its Rust is generated into `generated/datom-codec-kinds.rs` and committed:
+`tests/kinds.rs` compiles it against this crate's types, the generated
+associations asserting that each type bears its kind, and the `generated-kinds`
+Nix check regenerates it with the pinned ethos-zero and holds the committed file
+to it.
