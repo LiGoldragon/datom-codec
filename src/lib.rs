@@ -21,10 +21,10 @@ pub use core::{
     Actualizing, Branchable, Budget, Budgeted, Composable, Composing, CompositionDepthing,
     Compositional, Datom, DatomPositioning, Datomizable, Error, ErrorKind, ErrorLayer,
     ErrorRaising, Form, Naming, Positional, Positions, Potential, PotentialExtenting,
-    ProtosExtenting,
+    ProtosExtenting, Represented,
 };
 pub use decimal::{Decimal, DecimalRefusing, Decimating};
-pub use derive::{Composing, Datomizable};
+pub use derive::{Composing, Datomizable, Represented};
 pub use protos::Symbol;
 pub type Integer = i64;
 pub type Path = Vec<Integer>;

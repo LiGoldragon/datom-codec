@@ -159,6 +159,19 @@ pub trait Compositional: Composing {
 pub trait Datomizable {
     fn datomize(&self, at: Path) -> Datom;
 }
+/// The special representation: a type whose datom is the datom of another
+/// type, its representation. The type stays the Rust type; its two bodies
+/// convert it to its representation and back, and the `Represented` derive
+/// gives it [`Datomizable`] and [`Composing`] through them. A representation
+/// that names no value of the type is refused with the kind of fault, which
+/// composing places at the path of the datom it read.
+pub trait Represented {
+    type Representation: Datomizable + Composing;
+    fn represent(&self) -> Self::Representation;
+    fn from_representation(representation: Self::Representation) -> Result<Self, ErrorKind>
+    where
+        Self: Sized;
+}
 /// A datom's place in its tree, which branches to its children's places.
 pub trait Branchable {
     fn child(&self, index: Integer) -> Path;

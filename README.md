@@ -42,6 +42,15 @@ variant carries an inline struct. Hand-written impls are reserved to the
 intrinsics: `String`, `i64`, `Decimal`, `bool`, `Meaning`, `Vec`, `Option`,
 `Result`, `Box`, the tuples, and the protos types the errors carry.
 
+A type whose datom is another type's datom bears `Represented`, the special
+representation: the type stays the Rust type, its `Representation` is the type
+its datom is written as, and two hand-written bodies convert between them.
+`#[derive(Represented)]` gives it `Datomizable` and `Composing` through the
+representation, and a representation that names no value of the type is
+refused with an `ErrorKind` at the path of the datom read. A 32-byte digest
+written as its hex string and a number written as its digit words are the
+examples in `tests/represented.rs`.
+
 `Decimal` is the finite decimal, and `f64` bears no datom kind. A datom
 decimal is finite and point-mandatory; a bare `f64` is neither, so it has no
 datom text and no position reads one back. `Decimal` holds its float privately

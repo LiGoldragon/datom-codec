@@ -4,7 +4,7 @@
 //! the generated associations are compile-time assertions, so this target
 //! building is the witness.
 
-pub use datom_codec::{Budget, Datom, Error, Form, Path, Positions, Potential};
+pub use datom_codec::{Budget, Datom, Error, ErrorKind, Form, Path, Positions, Potential};
 
 #[path = "../generated/datom-codec-kinds.rs"]
 mod kinds;

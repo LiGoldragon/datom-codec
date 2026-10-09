@@ -54,6 +54,16 @@ pub trait Actualizing {
         Self: Sized;
 }
 #[rustfmt::skip]
+pub trait Represented {
+    type Representation: Datomizable + Composing;
+    fn represent(&self) -> Self::Representation;
+    fn from_representation(
+        input: Self::Representation,
+    ) -> std::result::Result<Self, crate::ErrorKind>
+    where
+        Self: Sized;
+}
+#[rustfmt::skip]
 const _: () = {
     fn assert_path_branchable<T: Branchable>() {}
     let _ = assert_path_branchable::<crate::Path>;

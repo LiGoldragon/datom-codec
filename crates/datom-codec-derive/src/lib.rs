@@ -199,3 +199,27 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
         }
     }.into()
 }
+
+/// The datom kinds through a special representation: the type's datom is the
+/// datom of its `Represented::Representation`, and composing refuses, at the
+/// path of the datom it read, a representation that names no value of the type.
+#[proc_macro_derive(Represented)]
+pub fn represented(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    quote! {
+        impl #impl_generics ::datom_codec::Datomizable for #name #ty_generics #where_clause {
+            fn datomize(&self, at: ::datom_codec::Path) -> ::datom_codec::Datom {
+                ::datom_codec::Datomizable::datomize(&<Self as ::datom_codec::Represented>::represent(self), at)
+            }
+        }
+        impl #impl_generics ::datom_codec::Composing for #name #ty_generics #where_clause {
+            fn compose(datom: &::datom_codec::Datom, budget: &mut ::datom_codec::Budget) -> ::std::result::Result<Self, ::datom_codec::Error> {
+                let representation = <<Self as ::datom_codec::Represented>::Representation as ::datom_codec::Composing>::compose(datom, budget)?;
+                <Self as ::datom_codec::Represented>::from_representation(representation).map_err(|kind| <::datom_codec::Error as ::datom_codec::ErrorRaising>::composition(datom.path.clone(), kind))
+            }
+        }
+    }
+    .into()
+}
