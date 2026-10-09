@@ -237,7 +237,10 @@ fn a_ticket_that_names_no_number_is_refused_at_its_path() {
     for (text, spelled) in [
         ("[]", ""),
         ("[ Zero Seven ]", "07"),
-        ("[ Four Two Nine Four Nine Six Seven Two Nine Six ]", "4294967296"),
+        (
+            "[ Four Two Nine Four Nine Six Seven Two Nine Six ]",
+            "4294967296",
+        ),
     ] {
         assert_eq!(
             read::<Ticket>(text).unwrap_err(),
