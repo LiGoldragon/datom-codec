@@ -5,7 +5,7 @@
 ; its unit Datom layer collides with the defined Datom type under Ethos's
 ; named-type-variant rule, so a declaration would falsely give that unit data.
 ; The kinds have their one home in datom-codec-kinds.ethos.
-Library
+Library.{
 [ protos:[ Extent Protos ReaderBudget Separator Symbol ] ]
 [ Path.Vector<Integer>
   Opaque.String
@@ -19,4 +19,4 @@ Library
          Meaning.Opaque ]
   Budget.{ Integer ReaderBudget Integer Integer } ]
 []
-[]
+[] }
