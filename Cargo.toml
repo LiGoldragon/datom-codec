@@ -21,7 +21,7 @@ rkyv = ["dep:rkyv", "protos/rkyv"]
 
 [dependencies]
 rkyv = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"], optional = true }
-protos = { git = "https://github.com/LiGoldragon/protos", rev = "15b41da8f2579e73ead59bc0c2b97529b8ac32d3" }
+protos = { git = "https://github.com/LiGoldragon/protos", rev = "7832e598bc4b4a4bf6300fadc0dbb8010ce846ec" }
 derive = { package = "datom-codec-derive", path = "crates/datom-codec-derive" }
 
 [dev-dependencies]

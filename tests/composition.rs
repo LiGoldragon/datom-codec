@@ -400,3 +400,41 @@ fn a_decimal_holds_only_what_a_decimal_position_reads_back() {
         "the sign of zero is not a distinction a decimal carries"
     );
 }
+
+#[derive(Debug, PartialEq, Composing, Datomizable)]
+enum Observation {
+    Locks(Vec<i64>),
+}
+
+#[derive(Debug, PartialEq, Composing, Datomizable)]
+enum Reply {
+    Observed(Observation),
+}
+
+/// Proposal branch: any whitespace, line breaks included, may stand between a
+/// separator and its body.
+#[test]
+fn whitespace_may_stand_between_a_separator_and_its_body() {
+    let text = "Observed.\n   Locks.\n      []";
+    let composed: Reply = Potential::from(text)
+        .actualize(&mut budget(16))
+        .unwrap_or_else(|error| panic!("{text} composes: {error:?}"));
+    assert_eq!(composed, Reply::Observed(Observation::Locks(vec![])));
+}
+
+/// The proposal's vector brackets are an ethos type sugar, not a datom form.
+#[test]
+fn vector_brackets_are_not_a_datom_form() {
+    let error = Potential::<Vec<i64>>::from("⟦ 1 2 ⟧")
+        .actualize(&mut budget(16))
+        .unwrap_err();
+    assert_eq!(error.layer, ErrorLayer::Datom);
+    assert_eq!(
+        "a⟦b"
+            .to_owned()
+            .datomize(Path::new())
+            .protosize()
+            .textualize(),
+        "«a⟦b»"
+    );
+}

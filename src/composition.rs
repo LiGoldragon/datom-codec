@@ -100,6 +100,19 @@ impl<'a> FormingDatoms<'a> for Former<'a> {
                                 },
                             });
                         }
+                        protos::Protos::Enclosed {
+                            enclosure: protos::Enclosure::Vectored,
+                            ..
+                        } => {
+                            return Err(Error {
+                                layer: ErrorLayer::Datom,
+                                path,
+                                kind: ErrorKind::Form {
+                                    expected: "Datom enclosure".into(),
+                                    found: "Vectored".into(),
+                                },
+                            });
+                        }
                         protos::Protos::Headed {
                             constraints: Some(_),
                             ..
@@ -170,7 +183,7 @@ impl Datomizable for String {
                 character.is_whitespace()
                     || matches!(
                         character,
-                        '{' | '}' | '[' | ']' | '<' | '>' | '«' | '»' | '(' | ')' | ';'
+                        '{' | '}' | '[' | ']' | '<' | '>' | '⟦' | '⟧' | '«' | '»' | '(' | ')' | ';'
                     )
             })
             || self.starts_with(separator)
@@ -219,7 +232,18 @@ impl BareStringComposing for Datom {
                             character.is_whitespace()
                                 || matches!(
                                     character,
-                                    '{' | '}' | '[' | ']' | '<' | '>' | '«' | '»' | '(' | ')' | ';'
+                                    '{' | '}'
+                                        | '['
+                                        | ']'
+                                        | '<'
+                                        | '>'
+                                        | '⟦'
+                                        | '⟧'
+                                        | '«'
+                                        | '»'
+                                        | '('
+                                        | ')'
+                                        | ';'
                                 )
                         })
                     {
@@ -251,7 +275,18 @@ impl BareStringComposing for Datom {
                     character.is_whitespace()
                         || matches!(
                             character,
-                            '{' | '}' | '[' | ']' | '<' | '>' | '«' | '»' | '(' | ')' | ';'
+                            '{' | '}'
+                                | '['
+                                | ']'
+                                | '<'
+                                | '>'
+                                | '⟦'
+                                | '⟧'
+                                | '«'
+                                | '»'
+                                | '('
+                                | ')'
+                                | ';'
                         )
                 })
             {
