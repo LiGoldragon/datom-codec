@@ -438,3 +438,20 @@ fn vector_brackets_are_not_a_datom_form() {
         "«a⟦b»"
     );
 }
+
+/// The proposal's white braces are an ethos type sugar, not a datom form.
+#[test]
+fn white_braces_are_not_a_datom_form() {
+    let error = Potential::<Vec<i64>>::from("⦃ 1 2 ⦄")
+        .actualize(&mut budget(16))
+        .unwrap_err();
+    assert_eq!(error.layer, ErrorLayer::Datom);
+    assert_eq!(
+        "a⦃b"
+            .to_owned()
+            .datomize(Path::new())
+            .protosize()
+            .textualize(),
+        "«a⦃b»"
+    );
+}
