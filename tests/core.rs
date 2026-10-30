@@ -945,6 +945,7 @@ enum MutualB<T> {
 fn exact_self_detection_bounds_similarly_named_wrappers_without_cycles() {
     let value = Node::Data(NodeData(7_i64));
     let datom = value.datomize(vec![]);
+    assert_eq!(datom.clone().protosize().textualize(), "Data.7");
     let rebuilt: Node<i64> = datom
         .compose(&mut Budget {
             remaining: 100,

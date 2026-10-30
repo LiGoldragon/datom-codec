@@ -5,7 +5,7 @@ use datom_codec::{
     Actualizing, Branchable, Budget, Composable, Composing, Compositional, Datom, Datomizable,
     Decimal, Error, ErrorKind, ErrorLayer, Form, Path, Potential,
 };
-use protos::{Protosizable, ReaderBudget, Textualizable};
+use protos::{Compactable, Protosizable, ReaderBudget, Textualizable};
 
 fn budget(remaining: i64) -> Budget {
     Budget {
@@ -398,5 +398,111 @@ fn a_decimal_holds_only_what_a_decimal_position_reads_back() {
         Decimal::try_from(-0.0).unwrap(),
         Decimal::try_from(0.0).unwrap(),
         "the sign of zero is not a distinction a decimal carries"
+    );
+}
+
+#[derive(Debug, PartialEq, Composing, Datomizable)]
+struct Name(String);
+#[derive(Debug, PartialEq, Composing, Datomizable)]
+enum Aspect {
+    Mind,
+    Psyche,
+}
+#[derive(Debug, PartialEq, Composing, Datomizable)]
+enum Layer {
+    Tertiary,
+    Secondary,
+}
+#[derive(Debug, PartialEq, Composing, Datomizable)]
+struct Address {
+    aspect: Aspect,
+    name: Name,
+    layer: Layer,
+}
+#[derive(Debug, PartialEq, Composing, Datomizable)]
+enum Request {
+    Launch(Address, Name, Name),
+    End(Name),
+}
+
+#[test]
+fn tuple_newtypes_use_the_inner_form_and_path() {
+    let name: Name = Potential::from("flowNexus")
+        .actualize(&mut budget(1))
+        .unwrap();
+    assert_eq!(name, Name("flowNexus".into()));
+    let at = vec![3, 2];
+    let datom = name.datomize(at.clone());
+    assert_eq!(datom.path, at);
+    assert_eq!(datom.form, Form::Bare("flowNexus".into()));
+    assert_eq!(datom.protosize().textualize(), "flowNexus");
+    let address: Address = Potential::from("{ Mind flowNexus Tertiary }")
+        .actualize(&mut budget(16))
+        .unwrap();
+    assert_eq!(address.name, name);
+    assert_eq!(
+        address.datomize(vec![]).protosize().compact(),
+        "{ Mind flowNexus Tertiary }"
+    );
+    let text = "Launch.{ { Mind flowNexus Tertiary } «» «Report that this test flow started.» }";
+    let launch: Request = Potential::from(text).actualize(&mut budget(32)).unwrap();
+    assert_eq!(
+        launch,
+        Request::Launch(
+            address,
+            Name(String::new()),
+            Name("Report that this test flow started.".into())
+        )
+    );
+    assert_eq!(launch.datomize(vec![]).protosize().compact(), text);
+}
+
+#[derive(Debug, PartialEq, Composing, Datomizable)]
+struct NamedField {
+    name: Name,
+}
+#[derive(Debug, PartialEq, Composing, Datomizable)]
+struct Wrapped<T>(T);
+
+#[test]
+fn newtypes_delegate_containers_errors_and_budget_to_the_inner_type() {
+    let wrapped: Wrapped<Vec<Name>> = Potential::from("[ flowNexus ethosNexus ]")
+        .actualize(&mut budget(3))
+        .unwrap();
+    let datom = wrapped.datomize(vec![4]);
+    let Form::Vector(children) = &datom.form else {
+        panic!("the inner vector supplies the form")
+    };
+    assert_eq!(children[0].path, vec![4, 0]);
+    assert_eq!(children[1].path, vec![4, 1]);
+    assert!(datom.compose::<Wrapped<Vec<Name>>>(&mut budget(2)).is_err());
+    let error = Datom {
+        path: vec![4, 1],
+        form: Form::Bare("x".into()),
+    }
+    .compose::<Wrapped<i64>>(&mut budget(1))
+    .unwrap_err();
+    assert_eq!(error.path, vec![4, 1]);
+    assert!(
+        Potential::<Name>::from("{ flowNexus }")
+            .actualize(&mut budget(4))
+            .is_err()
+    );
+}
+
+#[test]
+fn a_named_single_field_keeps_its_struct_form() {
+    let named: NamedField = Potential::from("{ flowNexus }")
+        .actualize(&mut budget(2))
+        .unwrap();
+    assert_eq!(<NamedField as Compositional>::ARITY, 1);
+    assert_eq!(
+        named.datomize(vec![]).protosize().textualize(),
+        "{ flowNexus }"
+    );
+    assert!(
+        Potential::<NamedField>::from("flowNexus")
+            .actualize(&mut budget(2))
+            .is_err()
     );
 }

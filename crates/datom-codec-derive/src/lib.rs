@@ -84,6 +84,16 @@ pub fn composing(input: TokenStream) -> TokenStream {
         }
     }
     let (impl_generics, ty_generics, where_clause) = bounded_generics.split_for_impl();
+    if matches!(fields, Fields::Unnamed(fields) if fields.unnamed.len() == 1) {
+        let ty = &fields.iter().next().unwrap().ty;
+        return quote! {
+            impl #impl_generics ::datom_codec::Composing for #name #ty_generics #where_clause {
+                fn compose(datom: &::datom_codec::Datom, budget: &mut ::datom_codec::Budget) -> ::std::result::Result<Self, ::datom_codec::Error> {
+                    ::std::result::Result::Ok(Self(<#ty as ::datom_codec::Composing>::compose(datom, budget)?))
+                }
+            }
+        }.into();
+    }
     let reads = fields.iter().enumerate().map(|(index, field)| {
         let ty = &field.ty;
         let binding = syn::Ident::new(&format!("field_{index}"), proc_macro2::Span::call_site());
@@ -176,6 +186,16 @@ pub fn datomizable(input: TokenStream) -> TokenStream {
         }
     }
     let (impl_generics, ty_generics, where_clause) = bounded_generics.split_for_impl();
+    if matches!(fields, Fields::Unnamed(fields) if fields.unnamed.len() == 1) {
+        return quote! {
+            impl #impl_generics ::datom_codec::Datomizable for #name #ty_generics #where_clause {
+                fn datomize(&self, at: ::datom_codec::Path) -> ::datom_codec::Datom {
+                    ::datom_codec::Datomizable::datomize(&self.0, at)
+                }
+            }
+        }
+        .into();
+    }
     let values: Vec<_> = fields
         .iter()
         .enumerate()
