@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "datom_codec",
+  "project_id": "51042410-1b25-4d58-ab55-e7415a441bd5"
+}
