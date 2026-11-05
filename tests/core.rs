@@ -130,6 +130,41 @@ fn extent_conversion_refusals_name_the_offending_position() {
 }
 
 #[test]
+fn an_extent_refuses_an_end_before_its_start() {
+    let mut potential = Potential::<protos::Extent>::from("Extent.{ 2 1 }");
+    let error = potential
+        .actualize(&mut Budget {
+            remaining: 8,
+            reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
+        })
+        .unwrap_err();
+    assert_eq!(error.path, vec![1, 1]);
+    assert_eq!(
+        potential.reader_extent(&error.path),
+        Some(protos::Extent { start: 11, end: 12 })
+    );
+    assert_eq!(
+        error.kind,
+        ErrorKind::Value {
+            expected: "extent end at or after start".into(),
+            value: "1".into(),
+        }
+    );
+    for text in ["Extent.{ 2 2 }", "Extent.{ 2 3 }"] {
+        Potential::<protos::Extent>::from(text)
+            .actualize(&mut Budget {
+                remaining: 8,
+                reader: ReaderBudget { remaining: 128 },
+                depth: 0,
+                maximum_depth: 4_096,
+            })
+            .unwrap_or_else(|error| panic!("{text} composes: {error:?}"));
+    }
+}
+
+#[test]
 fn scalar_refusal_keeps_the_datom_path() {
     let datom = Datom {
         path: vec![2],
