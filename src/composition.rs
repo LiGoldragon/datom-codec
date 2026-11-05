@@ -205,7 +205,7 @@ impl BareStringComposing for Datom {
         loop {
             budget.spend(&current.path)?;
             let text = match &current.form {
-                Form::Bare(text) | Form::String(text) if value.is_empty() => {
+                Form::String(text) if value.is_empty() => {
                     return Ok(text.clone());
                 }
                 Form::Bare(text) => text,

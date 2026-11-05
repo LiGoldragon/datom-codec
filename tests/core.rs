@@ -485,18 +485,21 @@ fn typed_enums_keep_bare_carried_and_daisy_variants() {
 
 #[test]
 fn delimited_variant_shapes_do_not_compose_as_strings() {
-    let error = Potential::<String>::from("Head.{ x }")
-        .actualize(&mut Budget {
-            remaining: 8,
-            reader: ReaderBudget { remaining: 128 },
-            depth: 0,
-            maximum_depth: 8,
-        })
-        .unwrap_err();
-    assert!(matches!(
-        error.kind,
-        ErrorKind::Form { ref expected, .. } if expected == "String"
-    ));
+    for text in ["Head.{ x }", "Head!{ x }", "Head:{ x }"] {
+        let error = Potential::<String>::from(text)
+            .actualize(&mut Budget {
+                remaining: 8,
+                reader: ReaderBudget { remaining: 128 },
+                depth: 0,
+                maximum_depth: 8,
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error.kind,
+            ErrorKind::Form { ref expected, .. }
+                if expected == "String" || expected == "bare String"
+        ));
+    }
 }
 
 #[test]
