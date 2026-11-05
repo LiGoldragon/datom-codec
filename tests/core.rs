@@ -3,7 +3,7 @@ use datom_codec::{
     ErrorKind, ErrorLayer, ErrorRaising, Form, Meaning, Path, Potential, PotentialExtenting,
     ProtosExtenting, Scalar,
 };
-use protos::{ExtentAccess, Protosizable, ReaderBudget, Textualizable};
+use protos::{ExtentAccess, PositionAccess, Protosizable, ReaderBudget, Textualizable};
 
 #[derive(Debug, PartialEq, Composing, Datomizable)]
 struct Score {
@@ -95,6 +95,41 @@ fn protos_symbol_and_reader_budget_are_datom_intrinsics() {
     let datom = reader.datomize(vec![]);
     let rebuilt: ReaderBudget = datom.compose(&mut budget).unwrap();
     assert_eq!(rebuilt, reader);
+}
+
+#[test]
+fn protos_position_is_a_bounded_integer_datom_intrinsic() {
+    let maximum = usize::try_from(i64::MAX).unwrap_or(usize::MAX);
+    let position = protos::Position::try_from(maximum).unwrap();
+    let datom = position.datomize(vec![3]);
+    assert_eq!(datom.path, vec![3]);
+    assert_eq!(datom.protosize().textualize(), maximum.to_string());
+    let rebuilt: protos::Position = datom
+        .compose(&mut Budget {
+            remaining: 2,
+            reader: ReaderBudget::try_from(1).unwrap(),
+            depth: 0,
+            maximum_depth: 4,
+        })
+        .unwrap();
+    assert_eq!(rebuilt.get(), maximum);
+
+    let error = Potential::<protos::Position>::from("-1")
+        .actualize(&mut Budget {
+            remaining: 2,
+            reader: ReaderBudget::try_from(8).unwrap(),
+            depth: 0,
+            maximum_depth: 4,
+        })
+        .unwrap_err();
+    assert_eq!(error.path, Vec::<i64>::new());
+    assert_eq!(
+        error.kind,
+        ErrorKind::Value {
+            expected: "non-negative bounded position".into(),
+            value: "-1".into(),
+        }
+    );
 }
 
 #[test]

@@ -469,6 +469,35 @@ impl<T: Composing, E: Composing> Composing for Result<T, E> {
     }
 }
 
+impl Datomizable for protos::Position {
+    fn datomize(&self, at: Path) -> Datom {
+        Integer::try_from(self.get())
+            .expect("Position is bounded by i64::MAX")
+            .datomize(at)
+    }
+}
+impl Composing for protos::Position {
+    fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
+        let position: Integer = datom.compose(budget)?;
+        let position = usize::try_from(position).map_err(|_| Error {
+            layer: ErrorLayer::Composition,
+            path: datom.path.clone(),
+            kind: ErrorKind::Value {
+                expected: "non-negative bounded position".into(),
+                value: position.to_string(),
+            },
+        })?;
+        Self::try_from(position).map_err(|_| Error {
+            layer: ErrorLayer::Composition,
+            path: datom.path.clone(),
+            kind: ErrorKind::Value {
+                expected: "non-negative bounded position".into(),
+                value: position.to_string(),
+            },
+        })
+    }
+}
+
 impl Datomizable for protos::Extent {
     fn datomize(&self, at: Path) -> Datom {
         Datom {
