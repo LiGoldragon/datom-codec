@@ -40,7 +40,8 @@ field's type is the position's type, a variant carrying nothing is its head
 alone, a single-field variant carries its type's own form, and a multi-field
 variant carries an inline struct. Hand-written impls are reserved to the
 intrinsics: `String`, `i64`, `Decimal`, `bool`, `Meaning`, `Vec`, `Option`,
-`Result`, `Box`, the tuples, and the protos types the errors carry.
+`Result`, `Box`, the tuples, and the protos intrinsics, including `Position` and
+the types errors carry.
 
 `Decimal` is the finite decimal, and `f64` bears no datom kind. A datom
 decimal is finite and point-mandatory; a bare `f64` is neither, so it has no
@@ -58,12 +59,11 @@ as the tuple it is; the tuples bear `Compositional` for arities two to twelve.
 
 ## Strings
 
-A string is written bare when the run needs no delimiters: no space, no
-delimiter glyph, and no separator run that would swallow the structure around
-it — a leading or trailing `.`, `!` or `:`, or two of them adjacent. So
-`gpt-5.6-luna`, `a:b:c` and `https://example.org/a` are bare, and `.a`, `a..b`
-and `5::7/128` are written in guillemets. Everything else is delimited, where
-a closing guillemet is escaped with a backslash.
+A string is written bare when the run needs no delimiters: it is nonempty and
+contains no whitespace or delimiter glyph. Syntax characters are content in a
+String position, so `gpt-5.6-luna`, `.a`, `a..b`, `a:.b` and `5::7/128` are
+bare. Empty strings and strings containing whitespace or delimiter glyphs are
+delimited, where a closing guillemet is escaped with a backslash.
 
 ## Errors
 
