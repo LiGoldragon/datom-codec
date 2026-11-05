@@ -419,9 +419,20 @@ impl<T: Datomizable> Datomizable for Option<T> {
 }
 impl<T: Composing> Composing for Option<T> {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
-        if matches!(&datom.form, Form::Bare(head) if head == "None") {
+        if let Form::Bare(head) = &datom.form {
             budget.spend(&datom.path)?;
-            return Ok(None);
+            return if head == "None" {
+                Ok(None)
+            } else {
+                Err(Error {
+                    layer: ErrorLayer::Composition,
+                    path: datom.path.clone(),
+                    kind: ErrorKind::Variant {
+                        expected: "Option".into(),
+                        found: head.clone(),
+                    },
+                })
+            };
         }
         let (head, body) = datom.variant(budget, "Variant")?;
         match head {

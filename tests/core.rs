@@ -645,6 +645,26 @@ fn unit_options_and_unit_enums_round_trip_as_bare_text() {
 }
 
 #[test]
+fn an_unknown_bare_option_refuses_as_a_variant() {
+    let error = Potential::<Option<i64>>::from("Other")
+        .actualize(&mut Budget {
+            remaining: 1,
+            reader: ReaderBudget { remaining: 128 },
+            depth: 0,
+            maximum_depth: 4_096,
+        })
+        .unwrap_err();
+    assert_eq!(error.path, Vec::<i64>::new());
+    assert_eq!(
+        error.kind,
+        ErrorKind::Variant {
+            expected: "Option".into(),
+            found: "Other".into(),
+        }
+    );
+}
+
+#[test]
 fn datom_refuses_non_datom_structural_forms() {
     let angled = Potential::<Vec<i64>>::from("< 1 2 >")
         .actualize(&mut Budget {
