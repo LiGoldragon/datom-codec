@@ -5,12 +5,12 @@ use datom_codec::{
     Actualizing, Branchable, Budget, Composable, Composing, Compositional, Datom, Datomizable,
     Decimal, Error, ErrorKind, ErrorLayer, Form, Path, Potential,
 };
-use protos::{Compactable, Protosizable, ReaderBudget, Textualizable};
+use protos::{Compactable, ExtentAccess, Protosizable, ReaderBudget, Textualizable};
 
 fn budget(remaining: i64) -> Budget {
     Budget {
         remaining,
-        reader: ReaderBudget { remaining: 4_096 },
+        reader: ReaderBudget::try_from(4_096).unwrap(),
         depth: 0,
         maximum_depth: 4_096,
     }
@@ -175,7 +175,7 @@ fn every_datomized_node_carries_the_path_it_sits_at() {
         layer: ErrorLayer::Protos,
         path: vec![1, 2],
         kind: ErrorKind::Structural(protos::Error {
-            extent: protos::Extent { start: 4, end: 5 },
+            extent: protos::Extent::from_offsets(4, 5),
             problem: protos::Problem::Unclosed('«'),
         }),
     };
@@ -211,11 +211,11 @@ fn a_bare_string_keeps_its_separators_unless_the_run_would_swallow_its_context()
         ("https://example.org/a", "https://example.org/a"),
         ("a!b", "a!b"),
         ("Some.Ada", "Some.Ada"),
-        ("5::7/128", "«5::7/128»"),
-        (".a", "«.a»"),
-        ("a.", "«a.»"),
-        ("a..b", "«a..b»"),
-        ("a:.b", "«a:.b»"),
+        ("5::7/128", "5::7/128"),
+        (".a", ".a"),
+        ("a.", "a."),
+        ("a..b", "a..b"),
+        ("a:.b", "a:.b"),
     ] {
         let value = value.to_owned();
         let text = value.datomize(Path::new()).protosize().textualize();

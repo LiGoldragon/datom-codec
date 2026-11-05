@@ -3,7 +3,7 @@ use datom_codec::{
     ErrorKind, ErrorLayer, ErrorRaising, Form, Meaning, Path, Potential, PotentialExtenting,
     ProtosExtenting, Scalar,
 };
-use protos::{Protosizable, ReaderBudget, Textualizable};
+use protos::{ExtentAccess, Protosizable, ReaderBudget, Textualizable};
 
 #[derive(Debug, PartialEq, Composing, Datomizable)]
 struct Score {
@@ -62,7 +62,7 @@ fn derived_struct_composes_its_typed_positions() {
     let value: Score = datom
         .compose(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -82,7 +82,7 @@ fn derived_struct_composes_its_typed_positions() {
 fn protos_symbol_and_reader_budget_are_datom_intrinsics() {
     let mut budget = Budget {
         remaining: 20,
-        reader: ReaderBudget { remaining: 128 },
+        reader: ReaderBudget::try_from(128).unwrap(),
         depth: 0,
         maximum_depth: 128,
     };
@@ -91,7 +91,7 @@ fn protos_symbol_and_reader_budget_are_datom_intrinsics() {
     let rebuilt: protos::Symbol = datom.compose(&mut budget.clone()).unwrap();
     assert_eq!(rebuilt, symbol);
 
-    let reader = ReaderBudget { remaining: 4_096 };
+    let reader = ReaderBudget::try_from(4_096).unwrap();
     let datom = reader.datomize(vec![]);
     let rebuilt: ReaderBudget = datom.compose(&mut budget).unwrap();
     assert_eq!(rebuilt, reader);
@@ -103,19 +103,19 @@ fn extent_conversion_refusals_name_the_offending_position() {
         (
             "Extent.{ -1 2 }",
             vec![1, 0],
-            protos::Extent { start: 9, end: 11 },
+            protos::Extent::from_offsets(9, 11),
         ),
         (
             "Extent.{ 1 -2 }",
             vec![1, 1],
-            protos::Extent { start: 11, end: 13 },
+            protos::Extent::from_offsets(11, 13),
         ),
     ] {
         let mut potential = Potential::<protos::Extent>::from(text);
         let error = potential
             .actualize(&mut Budget {
                 remaining: 8,
-                reader: ReaderBudget { remaining: 128 },
+                reader: ReaderBudget::try_from(128).unwrap(),
                 depth: 0,
                 maximum_depth: 4_096,
             })
@@ -135,7 +135,7 @@ fn an_extent_refuses_an_end_before_its_start() {
     let error = potential
         .actualize(&mut Budget {
             remaining: 8,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -143,7 +143,7 @@ fn an_extent_refuses_an_end_before_its_start() {
     assert_eq!(error.path, vec![1, 1]);
     assert_eq!(
         potential.reader_extent(&error.path),
-        Some(protos::Extent { start: 11, end: 12 })
+        Some(protos::Extent::from_offsets(11, 12))
     );
     assert_eq!(
         error.kind,
@@ -156,7 +156,7 @@ fn an_extent_refuses_an_end_before_its_start() {
         Potential::<protos::Extent>::from(text)
             .actualize(&mut Budget {
                 remaining: 8,
-                reader: ReaderBudget { remaining: 128 },
+                reader: ReaderBudget::try_from(128).unwrap(),
                 depth: 0,
                 maximum_depth: 4_096,
             })
@@ -174,7 +174,7 @@ fn scalar_refusal_keeps_the_datom_path() {
         &datom,
         &mut Budget {
             remaining: 1,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         },
@@ -192,7 +192,7 @@ fn derived_variants_use_their_rust_names_as_heads() {
         datom
             .compose::<Reply>(&mut Budget {
                 remaining: 10,
-                reader: ReaderBudget { remaining: 10 },
+                reader: ReaderBudget::try_from(10).unwrap(),
                 depth: 0,
                 maximum_depth: 4_096
             })
@@ -204,7 +204,7 @@ fn derived_variants_use_their_rust_names_as_heads() {
         pending
             .compose::<Reply>(&mut Budget {
                 remaining: 10,
-                reader: ReaderBudget { remaining: 10 },
+                reader: ReaderBudget::try_from(10).unwrap(),
                 depth: 0,
                 maximum_depth: 4_096
             })
@@ -216,7 +216,7 @@ fn derived_variants_use_their_rust_names_as_heads() {
         Potential::<Reply>::from("Pending")
             .actualize(&mut Budget {
                 remaining: 1,
-                reader: ReaderBudget { remaining: 128 },
+                reader: ReaderBudget::try_from(128).unwrap(),
                 depth: 0,
                 maximum_depth: 4_096
             })
@@ -247,7 +247,7 @@ fn scalar_writers_preserve_their_textual_kind() {
             },
             &mut Budget {
                 remaining: 1,
-                reader: ReaderBudget { remaining: 1 },
+                reader: ReaderBudget::try_from(1).unwrap(),
                 depth: 0,
                 maximum_depth: 4_096
             }
@@ -262,7 +262,7 @@ fn qualified_heads_refuse_at_the_variant_path() {
     let error = potential
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -275,7 +275,7 @@ fn qualified_heads_refuse_at_the_variant_path() {
     ));
     assert_eq!(
         potential.reader_extent(&error.path),
-        Some(protos::Extent { start: 0, end: 19 })
+        Some(protos::Extent::from_offsets(0, 19))
     );
 }
 
@@ -299,7 +299,7 @@ fn potential_actualizes_text_through_protos_and_datom() {
     let value: Score = Potential::from("{ Ada 42 True }")
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 10 },
+            reader: ReaderBudget::try_from(10).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -320,7 +320,7 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
     let timestamp: String = Potential::from("2026-09-03T17:46:20")
         .actualize(&mut Budget {
             remaining: 1,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -329,7 +329,7 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
     let name: String = Potential::from("Ada:one")
         .actualize(&mut Budget {
             remaining: 1,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -339,7 +339,7 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
     let string: Option<String> = Potential::from("Some.42")
         .actualize(&mut Budget {
             remaining: 2,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -348,7 +348,7 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
     let integer: Option<i64> = Potential::from("Some.42")
         .actualize(&mut Budget {
             remaining: 2,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -357,7 +357,7 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
     let decimal: Decimal = Potential::from("3.14")
         .actualize(&mut Budget {
             remaining: 2,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -366,7 +366,7 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
     let optional_decimal: Option<Decimal> = Potential::from("Some.3.14")
         .actualize(&mut Budget {
             remaining: 3,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -393,15 +393,15 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
 fn option_string_with_protos_separators_round_trips() {
     let value = Some("5::7/128".to_owned());
     let rendered = value.datomize(vec![]).protosize().textualize();
-    assert_eq!(rendered, "Some.«5::7/128»");
+    assert_eq!(rendered, "Some.5::7/128");
     let decoded: Option<String> = Potential::from(rendered.as_str())
         .actualize(&mut Budget {
             remaining: 2,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
-        .expect("delimited separator string decodes");
+        .expect("bare separator string decodes");
     assert_eq!(decoded, value);
 }
 
@@ -416,7 +416,7 @@ fn typed_string_positions_resolve_bare_syntax_characters() {
     let value: PunctuatedStrings = Potential::from(text)
         .actualize(&mut Budget {
             remaining: 16,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 16,
         })
@@ -428,10 +428,10 @@ fn typed_string_positions_resolve_bare_syntax_characters() {
 #[test]
 fn string_rule_round_trips_bare_punctuation_and_delimited_content() {
     for (value, canonical) in [
-        (".a", "«.a»"),
-        ("a.", "«a.»"),
-        ("a..b", "«a..b»"),
-        (".codex/agents/worker.toml", "«.codex/agents/worker.toml»"),
+        (".a", ".a"),
+        ("a.", "a."),
+        ("a..b", "a..b"),
+        (".codex/agents/worker.toml", ".codex/agents/worker.toml"),
         ("lower.case", "lower.case"),
         ("Upper.Case", "Upper.Case"),
         ("a:b:c", "a:b:c"),
@@ -452,7 +452,7 @@ fn string_rule_round_trips_bare_punctuation_and_delimited_content() {
         let rebuilt: String = Potential::from(text)
             .actualize(&mut Budget {
                 remaining: 64,
-                reader: ReaderBudget { remaining: 256 },
+                reader: ReaderBudget::try_from(256).unwrap(),
                 depth: 0,
                 maximum_depth: 64,
             })
@@ -473,7 +473,7 @@ fn typed_enums_keep_bare_carried_and_daisy_variants() {
         let value: Message = Potential::from(text)
             .actualize(&mut Budget {
                 remaining: 16,
-                reader: ReaderBudget { remaining: 128 },
+                reader: ReaderBudget::try_from(128).unwrap(),
                 depth: 0,
                 maximum_depth: 16,
             })
@@ -489,7 +489,7 @@ fn delimited_variant_shapes_do_not_compose_as_strings() {
         let error = Potential::<String>::from(text)
             .actualize(&mut Budget {
                 remaining: 8,
-                reader: ReaderBudget { remaining: 128 },
+                reader: ReaderBudget::try_from(128).unwrap(),
                 depth: 0,
                 maximum_depth: 8,
             })
@@ -528,7 +528,7 @@ fn dotted_string_composition_obeys_depth_and_work_budgets() {
     };
     let mut depth_budget = Budget {
         remaining: 16,
-        reader: ReaderBudget { remaining: 16 },
+        reader: ReaderBudget::try_from(16).unwrap(),
         depth: 0,
         maximum_depth: 3,
     };
@@ -538,7 +538,7 @@ fn dotted_string_composition_obeys_depth_and_work_budgets() {
 
     let mut work_budget = Budget {
         remaining: 2,
-        reader: ReaderBudget { remaining: 16 },
+        reader: ReaderBudget::try_from(16).unwrap(),
         depth: 0,
         maximum_depth: 16,
     };
@@ -560,7 +560,7 @@ fn generic_containers_and_meaning_round_trip_their_forms() {
     let rebuilt: Wrapper<Option<Box<Meaning>>> = datom
         .compose(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 10 },
+            reader: ReaderBudget::try_from(10).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -572,7 +572,7 @@ fn generic_containers_and_meaning_round_trip_their_forms() {
         datom
             .compose::<Result<i64, String>>(&mut Budget {
                 remaining: 10,
-                reader: ReaderBudget { remaining: 10 },
+                reader: ReaderBudget::try_from(10).unwrap(),
                 depth: 0,
                 maximum_depth: 4_096
             })
@@ -586,7 +586,7 @@ fn potential_reports_structural_and_budget_errors_at_their_context() {
     let structural = Potential::<Score>::from("{ Ada")
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -596,7 +596,7 @@ fn potential_reports_structural_and_budget_errors_at_their_context() {
     let exhausted = Potential::<Score>::from("{ Ada 42 True }")
         .actualize(&mut Budget {
             remaining: 0,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -610,7 +610,7 @@ fn potential_refuses_before_composition_when_reader_budget_is_exhausted() {
     let error = Potential::<String>::from("Ada")
         .actualize(&mut Budget {
             remaining: 1,
-            reader: ReaderBudget { remaining: 0 },
+            reader: ReaderBudget::try_from(0).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -627,7 +627,7 @@ fn unit_options_and_unit_enums_round_trip_as_bare_text() {
         Potential::<Option<i64>>::from("None")
             .actualize(&mut Budget {
                 remaining: 1,
-                reader: ReaderBudget { remaining: 128 },
+                reader: ReaderBudget::try_from(128).unwrap(),
                 depth: 0,
                 maximum_depth: 4_096
             })
@@ -638,7 +638,7 @@ fn unit_options_and_unit_enums_round_trip_as_bare_text() {
         Potential::<Reply>::from("Pending")
             .actualize(&mut Budget {
                 remaining: 1,
-                reader: ReaderBudget { remaining: 128 },
+                reader: ReaderBudget::try_from(128).unwrap(),
                 depth: 0,
                 maximum_depth: 4_096
             })
@@ -652,7 +652,7 @@ fn an_unknown_bare_option_refuses_as_a_variant() {
     let error = Potential::<Option<i64>>::from("Other")
         .actualize(&mut Budget {
             remaining: 1,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -672,7 +672,7 @@ fn datom_refuses_non_datom_structural_forms() {
     let angled = Potential::<Vec<i64>>::from("< 1 2 >")
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -686,7 +686,7 @@ fn datom_refuses_non_datom_structural_forms() {
     let positions = Potential::<Pair>::from("Values.[ 1 2 ]")
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -707,7 +707,7 @@ fn strings_quote_delimiters_keep_bare_separators_and_refuse_meaning_text() {
             Potential::<String>::from(text)
                 .actualize(&mut Budget {
                     remaining: 1,
-                    reader: ReaderBudget { remaining: 128 },
+                    reader: ReaderBudget::try_from(128).unwrap(),
                     depth: 0,
                     maximum_depth: 4_096
                 })
@@ -722,7 +722,7 @@ fn strings_quote_delimiters_keep_bare_separators_and_refuse_meaning_text() {
             Potential::<String>::from(text)
                 .actualize(&mut Budget {
                     remaining: 8,
-                    reader: ReaderBudget { remaining: 128 },
+                    reader: ReaderBudget::try_from(128).unwrap(),
                     depth: 0,
                     maximum_depth: 8,
                 })
@@ -733,7 +733,7 @@ fn strings_quote_delimiters_keep_bare_separators_and_refuse_meaning_text() {
     let error = Potential::<String>::from("(a meaning)")
         .actualize(&mut Budget {
             remaining: 1,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -748,30 +748,10 @@ fn strings_quote_delimiters_keep_bare_separators_and_refuse_meaning_text() {
 }
 
 #[test]
-fn bare_string_composition_obeys_the_writer_grammar() {
-    for value in [".a", "a.", "a..b", "a:.b"] {
-        let datom = Datom {
-            path: vec![],
-            form: Form::Bare(value.into()),
-        };
-        let error = String::compose(
-            &datom,
-            &mut Budget {
-                remaining: 1,
-                reader: ReaderBudget { remaining: 1 },
-                depth: 0,
-                maximum_depth: 1,
-            },
-        )
-        .unwrap_err();
-        assert!(matches!(
-            error.kind,
-            ErrorKind::Form { ref expected, ref found }
-                if expected == "bare String" && found == "Bare"
-        ));
-    }
-
-    for value in ["a-b", "a!b", "a:b", "a.b"] {
+fn bare_string_composition_accepts_syntax_characters_as_content() {
+    for value in [
+        "a-b", "a!b", "a:b", "a.b", ".a", "a.", "a..b", "a:.b", "5::7/128",
+    ] {
         let datom = Datom {
             path: vec![],
             form: Form::Bare(value.into()),
@@ -781,7 +761,7 @@ fn bare_string_composition_obeys_the_writer_grammar() {
                 &datom,
                 &mut Budget {
                     remaining: 1,
-                    reader: ReaderBudget { remaining: 1 },
+                    reader: ReaderBudget::try_from(1).unwrap(),
                     depth: 0,
                     maximum_depth: 1,
                 },
@@ -798,7 +778,7 @@ fn retained_reader_finds_nested_composition_fault_extents() {
     let error = vector
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -806,14 +786,14 @@ fn retained_reader_finds_nested_composition_fault_extents() {
     assert_eq!(error.path, vec![1]);
     assert_eq!(
         vector.reader_extent(&error.path),
-        Some(protos::Extent { start: 4, end: 5 })
+        Some(protos::Extent::from_offsets(4, 5))
     );
 
     let mut variant = Potential::<Pair>::from("Values.{ 1 x }");
     let error = variant
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -821,14 +801,14 @@ fn retained_reader_finds_nested_composition_fault_extents() {
     assert_eq!(error.path, vec![1, 1]);
     assert_eq!(
         variant.reader_extent(&error.path),
-        Some(protos::Extent { start: 11, end: 12 })
+        Some(protos::Extent::from_offsets(11, 12))
     );
 }
 
 #[test]
 fn typed_protos_errors_round_trip_without_a_reader_tree() {
     let error = protos::Error {
-        extent: protos::Extent { start: 3, end: 4 },
+        extent: protos::Extent::from_offsets(3, 4),
         problem: protos::Problem::Unexpected('@'),
     };
     let datom = error.datomize(vec![]);
@@ -836,7 +816,7 @@ fn typed_protos_errors_round_trip_without_a_reader_tree() {
     let rebuilt: protos::Error = Potential::from(text)
         .actualize(&mut Budget {
             remaining: 20,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -848,7 +828,7 @@ fn typed_protos_errors_round_trip_without_a_reader_tree() {
 fn an_unknown_problem_variant_refuses_before_reading_its_payload() {
     let mut budget = Budget {
         remaining: 2,
-        reader: ReaderBudget { remaining: 128 },
+        reader: ReaderBudget::try_from(128).unwrap(),
         depth: 0,
         maximum_depth: 4_096,
     };
@@ -881,7 +861,7 @@ enum GenericReply<T> {
 fn generic_enum_derives_bound_every_payload_shape() {
     let budget = || Budget {
         remaining: 50,
-        reader: ReaderBudget { remaining: 128 },
+        reader: ReaderBudget::try_from(128).unwrap(),
         depth: 0,
         maximum_depth: 4_096,
     };
@@ -914,7 +894,7 @@ fn datom_errors_round_trip_with_their_raising_layer() {
     let rebuilt: Error = Potential::from(text)
         .actualize(&mut Budget {
             remaining: 30,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -927,7 +907,7 @@ fn an_unknown_bare_error_kind_refuses_as_a_variant() {
     let error = Potential::<ErrorKind>::from("Other")
         .actualize(&mut Budget {
             remaining: 1,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 4_096,
         })
@@ -975,9 +955,7 @@ fn composition_depth_is_bounded_independently_from_node_budget() {
     let error = datom
         .compose::<Recursive>(&mut Budget {
             remaining: 1_000_000,
-            reader: ReaderBudget {
-                remaining: 1_000_000,
-            },
+            reader: ReaderBudget::try_from(1_000_000).unwrap(),
             depth: 0,
             maximum_depth: 32,
         })
@@ -1022,13 +1000,7 @@ fn wide_projection_keeps_canonical_extents() {
     };
     let protos = datom.protosize();
     assert_eq!(protos.textualize().len(), 20_003);
-    assert_eq!(
-        protos.extent(),
-        protos::Extent {
-            start: 0,
-            end: 20_003
-        }
-    );
+    assert_eq!(protos.extent(), protos::Extent::from_offsets(0, 20_003));
 }
 
 #[derive(Debug, PartialEq, Composing, Datomizable)]
@@ -1062,7 +1034,7 @@ fn recursive_struct_derives_without_a_self_bound_cycle() {
     let rebuilt: Chain = datom
         .compose(&mut Budget {
             remaining: 100,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 128,
         })
@@ -1080,7 +1052,7 @@ fn recursive_struct_derives_without_a_self_bound_cycle() {
     let rebuilt: GenericChain<i64> = datom
         .compose(&mut Budget {
             remaining: 100,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 128,
         })
@@ -1095,7 +1067,7 @@ fn recursive_generic_enum_derives_without_a_self_bound_cycle() {
     let rebuilt: RecursiveNode<i64> = datom
         .compose(&mut Budget {
             remaining: 100,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 128,
         })
@@ -1129,7 +1101,7 @@ fn exact_self_detection_bounds_similarly_named_wrappers_without_cycles() {
     let rebuilt: Node<i64> = datom
         .compose(&mut Budget {
             remaining: 100,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 128,
         })
@@ -1140,7 +1112,7 @@ fn exact_self_detection_bounds_similarly_named_wrappers_without_cycles() {
     let rebuilt: MutualA<i64> = datom
         .compose(&mut Budget {
             remaining: 100,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::try_from(128).unwrap(),
             depth: 0,
             maximum_depth: 128,
         })
@@ -1151,15 +1123,12 @@ fn exact_self_detection_bounds_similarly_named_wrappers_without_cycles() {
 #[test]
 fn manually_built_hundred_thousand_deep_protos_refuses_or_forms_without_recursion() {
     let mut protos = protos::Protos::Bare {
-        extent: protos::Extent { start: 0, end: 1 },
+        extent: protos::Extent::from_offsets(0, 1),
         text: "x".into(),
     };
     for index in 0..100_000 {
         protos = protos::Protos::Headed {
-            extent: protos::Extent {
-                start: 0,
-                end: index + 3,
-            },
+            extent: protos::Extent::from_offsets(0, index + 3),
             head: protos::Symbol("V".into()),
             constraints: None,
             separator: protos::Separator::Period,

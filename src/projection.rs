@@ -1,12 +1,9 @@
 use crate::{Datom, Form};
+use protos::ExtentAccess;
 
 pub(crate) trait Projecting {
     fn project(&self) -> protos::Protos;
 }
-
-/// A projected node has no text of its own yet; protos assigns the extents of
-/// the canonical print once the tree is whole.
-const UNPLACED: protos::Extent = protos::Extent { start: 0, end: 0 };
 
 enum Build<'a> {
     Visit(&'a Datom),
@@ -31,16 +28,16 @@ impl<'a> Building<'a> for Builder<'a> {
             match job {
                 Build::Visit(datom) => match &datom.form {
                     Form::Bare(text) => builder.values.push(protos::Protos::Bare {
-                        extent: UNPLACED,
+                        extent: protos::Extent::from_offsets(0, 0),
                         text: text.clone(),
                     }),
                     Form::String(content) => builder.values.push(protos::Protos::Opaque {
-                        extent: UNPLACED,
+                        extent: protos::Extent::from_offsets(0, 0),
                         boundary: protos::Boundary::Guillemets,
                         content: content.clone(),
                     }),
                     Form::Meaning(content) => builder.values.push(protos::Protos::Opaque {
-                        extent: UNPLACED,
+                        extent: protos::Extent::from_offsets(0, 0),
                         boundary: protos::Boundary::Parentheses,
                         content: content.clone(),
                     }),
@@ -63,7 +60,7 @@ impl<'a> Building<'a> for Builder<'a> {
                 Build::Enclosed(enclosure, count) => {
                     let children = builder.values.split_off(builder.values.len() - count);
                     builder.values.push(protos::Protos::Enclosed {
-                        extent: UNPLACED,
+                        extent: protos::Extent::from_offsets(0, 0),
                         enclosure,
                         children,
                     });
@@ -71,7 +68,7 @@ impl<'a> Building<'a> for Builder<'a> {
                 Build::Headed(head) => {
                     let body = Box::new(builder.values.pop().expect("projected headed body"));
                     builder.values.push(protos::Protos::Headed {
-                        extent: UNPLACED,
+                        extent: protos::Extent::from_offsets(0, 0),
                         head,
                         constraints: None,
                         separator: protos::Separator::Period,

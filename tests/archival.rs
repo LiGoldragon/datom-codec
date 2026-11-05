@@ -4,6 +4,7 @@
 //! contract holding it can cross a wire.
 
 use datom_codec::{Error, ErrorKind, ErrorLayer};
+use protos::ExtentAccess;
 
 trait Crossing: Sized {
     fn crossed(&self) -> Self;
@@ -23,7 +24,7 @@ fn a_datom_error_crosses_the_wire() {
             layer: ErrorLayer::Protos,
             path: vec![0, 2],
             kind: ErrorKind::Structural(protos::Error {
-                extent: protos::Extent { start: 1, end: 4 },
+                extent: protos::Extent::from_offsets(1, 4),
                 problem: protos::Problem::Unclosed('['),
             }),
         },

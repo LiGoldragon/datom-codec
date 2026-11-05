@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use crate::*;
+use protos::{BudgetAccess, ExtentAccess, Position, PositionAccess};
 
 pub trait DatomForming {
     fn datom_form(&self, path: Path) -> Result<Datom, Error>;
@@ -168,7 +169,6 @@ trait BareStringSyntax {
 
 impl BareStringSyntax for str {
     fn is_bare_string(&self) -> bool {
-        let separator = |character: char| matches!(character, '.' | '!' | ':');
         !self.is_empty()
             && !self.chars().any(|character| {
                 character.is_whitespace()
@@ -177,12 +177,6 @@ impl BareStringSyntax for str {
                         '{' | '}' | '[' | ']' | '<' | '>' | '«' | '»' | '(' | ')' | ';'
                     )
             })
-            && !self.starts_with(separator)
-            && !self.ends_with(separator)
-            && !self
-                .chars()
-                .zip(self.chars().skip(1))
-                .any(|(left, right)| separator(left) && separator(right))
     }
 }
 
@@ -480,8 +474,12 @@ impl Datomizable for protos::Extent {
         Datom {
             path: at.child(1),
             form: Form::Struct(vec![
-                (self.start as i64).datomize(at.child(1).child(0)),
-                (self.end as i64).datomize(at.child(1).child(1)),
+                Integer::try_from(self.start().get())
+                    .expect("Position is bounded by i64::MAX")
+                    .datomize(at.child(1).child(0)),
+                Integer::try_from(self.end().get())
+                    .expect("Position is bounded by i64::MAX")
+                    .datomize(at.child(1).child(1)),
             ]),
         }
         .named_variant(at, "Extent")
@@ -520,17 +518,30 @@ impl Composing for protos::Extent {
                 value: end.to_string(),
             },
         })?;
-        if end < start {
-            return Err(Error {
-                layer: ErrorLayer::Composition,
-                path: positions[1].path.clone(),
-                kind: ErrorKind::Value {
-                    expected: "extent end at or after start".into(),
-                    value: end.to_string(),
-                },
-            });
-        }
-        Ok(Self { start, end })
+        let start = Position::try_from(start).map_err(|_| Error {
+            layer: ErrorLayer::Composition,
+            path: positions[0].path.clone(),
+            kind: ErrorKind::Value {
+                expected: "bounded extent position".into(),
+                value: start.to_string(),
+            },
+        })?;
+        let end = Position::try_from(end).map_err(|_| Error {
+            layer: ErrorLayer::Composition,
+            path: positions[1].path.clone(),
+            kind: ErrorKind::Value {
+                expected: "bounded extent position".into(),
+                value: end.to_string(),
+            },
+        })?;
+        protos::Extent::new(start, end).map_err(|reversed| Error {
+            layer: ErrorLayer::Composition,
+            path: positions[1].path.clone(),
+            kind: ErrorKind::Value {
+                expected: "extent end at or after start".into(),
+                value: reversed.end.get().to_string(),
+            },
+        })
     }
 }
 
@@ -587,21 +598,29 @@ impl Composing for protos::Symbol {
 
 impl Datomizable for protos::ReaderBudget {
     fn datomize(&self, at: Path) -> Datom {
-        (self.remaining as Integer).datomize(at)
+        Integer::try_from(self.remaining())
+            .expect("ReaderBudget is bounded by i64::MAX")
+            .datomize(at)
     }
 }
 impl Composing for protos::ReaderBudget {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
         let remaining: Integer = datom.compose(budget)?;
-        Ok(Self {
-            remaining: remaining.try_into().map_err(|_| Error {
-                layer: ErrorLayer::Composition,
-                path: datom.path.clone(),
-                kind: ErrorKind::Value {
-                    expected: "non-negative reader budget".into(),
-                    value: remaining.to_string(),
-                },
-            })?,
+        let remaining: usize = remaining.try_into().map_err(|_| Error {
+            layer: ErrorLayer::Composition,
+            path: datom.path.clone(),
+            kind: ErrorKind::Value {
+                expected: "non-negative reader budget".into(),
+                value: remaining.to_string(),
+            },
+        })?;
+        Self::try_from(remaining).map_err(|_| Error {
+            layer: ErrorLayer::Composition,
+            path: datom.path.clone(),
+            kind: ErrorKind::Value {
+                expected: "bounded reader budget".into(),
+                value: remaining.to_string(),
+            },
         })
     }
 }
