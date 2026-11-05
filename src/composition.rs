@@ -641,6 +641,20 @@ impl Composing for protos::Problem {
             };
         }
         let (head, body) = datom.variant(budget, "Problem")?;
+        let form: fn(char) -> Self = match head {
+            "Unclosed" => Self::Unclosed,
+            "Unexpected" => Self::Unexpected,
+            found => {
+                return Err(Error {
+                    layer: ErrorLayer::Composition,
+                    path: datom.path.clone(),
+                    kind: ErrorKind::Variant {
+                        expected: "Problem".into(),
+                        found: found.to_owned(),
+                    },
+                });
+            }
+        };
         let character: String = body.compose(budget)?;
         let mut characters = character.chars();
         let Some(character) = characters.next().filter(|_| characters.next().is_none()) else {
@@ -653,18 +667,7 @@ impl Composing for protos::Problem {
                 },
             });
         };
-        match head {
-            "Unclosed" => Ok(Self::Unclosed(character)),
-            "Unexpected" => Ok(Self::Unexpected(character)),
-            found => Err(Error {
-                layer: ErrorLayer::Composition,
-                path: datom.path.clone(),
-                kind: ErrorKind::Variant {
-                    expected: "Problem".into(),
-                    found: found.to_owned(),
-                },
-            }),
-        }
+        Ok(form(character))
     }
 }
 

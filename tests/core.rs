@@ -741,6 +741,31 @@ fn typed_protos_errors_round_trip_without_a_reader_tree() {
     assert_eq!(rebuilt, error);
 }
 
+#[test]
+fn an_unknown_problem_variant_refuses_before_reading_its_payload() {
+    let mut budget = Budget {
+        remaining: 2,
+        reader: ReaderBudget { remaining: 128 },
+        depth: 0,
+        maximum_depth: 4_096,
+    };
+    let error = Potential::<protos::Problem>::from("Other.long")
+        .actualize(&mut budget)
+        .unwrap_err();
+    assert_eq!(error.path, Vec::<i64>::new());
+    assert_eq!(
+        error.kind,
+        ErrorKind::Variant {
+            expected: "Problem".into(),
+            found: "Other".into(),
+        }
+    );
+    assert_eq!(
+        budget.remaining, 1,
+        "only the unknown variant node is inspected"
+    );
+}
+
 #[derive(Debug, PartialEq, Composing, Datomizable)]
 enum GenericReply<T> {
     Pending,
