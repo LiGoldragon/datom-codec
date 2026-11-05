@@ -162,27 +162,36 @@ impl DatomForming for protos::Protos {
     }
 }
 
-impl Datomizable for String {
-    fn datomize(&self, at: Path) -> Datom {
+trait BareStringSyntax {
+    fn is_bare_string(&self) -> bool;
+}
+
+impl BareStringSyntax for str {
+    fn is_bare_string(&self) -> bool {
         let separator = |character: char| matches!(character, '.' | '!' | ':');
-        let delimited = self.is_empty()
-            || self.chars().any(|character| {
+        !self.is_empty()
+            && !self.chars().any(|character| {
                 character.is_whitespace()
                     || matches!(
                         character,
                         '{' | '}' | '[' | ']' | '<' | '>' | '«' | '»' | '(' | ')' | ';'
                     )
             })
-            || self.starts_with(separator)
-            || self.ends_with(separator)
-            || self
+            && !self.starts_with(separator)
+            && !self.ends_with(separator)
+            && !self
                 .chars()
                 .zip(self.chars().skip(1))
-                .any(|(left, right)| separator(left) && separator(right));
-        let form = if delimited {
-            Form::String(self.clone())
-        } else {
+                .any(|(left, right)| separator(left) && separator(right))
+    }
+}
+
+impl Datomizable for String {
+    fn datomize(&self, at: Path) -> Datom {
+        let form = if self.is_bare_string() {
             Form::Bare(self.clone())
+        } else {
+            Form::String(self.clone())
         };
         Datom { path: at, form }
     }
@@ -246,15 +255,7 @@ impl BareStringComposing for Datom {
                     ));
                 }
             };
-            if text.is_empty()
-                || text.chars().any(|character| {
-                    character.is_whitespace()
-                        || matches!(
-                            character,
-                            '{' | '}' | '[' | ']' | '<' | '>' | '«' | '»' | '(' | ')' | ';'
-                        )
-                })
-            {
+            if !text.is_bare_string() {
                 return Err(Error::composition(
                     current.path.clone(),
                     ErrorKind::Form {

@@ -748,6 +748,51 @@ fn strings_quote_delimiters_keep_bare_separators_and_refuse_meaning_text() {
 }
 
 #[test]
+fn bare_string_composition_obeys_the_writer_grammar() {
+    for value in [".a", "a.", "a..b", "a:.b"] {
+        let datom = Datom {
+            path: vec![],
+            form: Form::Bare(value.into()),
+        };
+        let error = String::compose(
+            &datom,
+            &mut Budget {
+                remaining: 1,
+                reader: ReaderBudget { remaining: 1 },
+                depth: 0,
+                maximum_depth: 1,
+            },
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error.kind,
+            ErrorKind::Form { ref expected, ref found }
+                if expected == "bare String" && found == "Bare"
+        ));
+    }
+
+    for value in ["a-b", "a!b", "a:b", "a.b"] {
+        let datom = Datom {
+            path: vec![],
+            form: Form::Bare(value.into()),
+        };
+        assert_eq!(
+            String::compose(
+                &datom,
+                &mut Budget {
+                    remaining: 1,
+                    reader: ReaderBudget { remaining: 1 },
+                    depth: 0,
+                    maximum_depth: 1,
+                },
+            )
+            .unwrap(),
+            value
+        );
+    }
+}
+
+#[test]
 fn retained_reader_finds_nested_composition_fault_extents() {
     let mut vector = Potential::<Vec<i64>>::from("[ 1 x ]");
     let error = vector
