@@ -349,9 +349,19 @@ impl Datomizable for ErrorKind {
 }
 impl Composing for ErrorKind {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
-        if matches!(&datom.form, Form::Bare(name) if name == "Budget") {
+        if let Form::Bare(name) = &datom.form {
             budget.spend(&datom.path)?;
-            return Ok(Self::Budget);
+            return if name == "Budget" {
+                Ok(Self::Budget)
+            } else {
+                Err(Error::composition(
+                    datom.path.clone(),
+                    ErrorKind::Variant {
+                        expected: "ErrorKind".into(),
+                        found: name.clone(),
+                    },
+                ))
+            };
         }
         let (head, body) = datom.variant(budget, "ErrorKind")?;
         match head {
