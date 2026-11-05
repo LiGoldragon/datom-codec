@@ -489,10 +489,13 @@ impl Composing for protos::Extent {
             });
         }
         let (start, end): (i64, i64) = body.compose_positions(budget)?;
+        let Form::Struct(positions) = &body.form else {
+            unreachable!("compose_positions accepted an Extent struct")
+        };
         Ok(Self {
             start: start.try_into().map_err(|_| Error {
                 layer: ErrorLayer::Composition,
-                path: Path::new(),
+                path: positions[0].path.clone(),
                 kind: ErrorKind::Value {
                     expected: "non-negative extent".into(),
                     value: start.to_string(),
@@ -500,7 +503,7 @@ impl Composing for protos::Extent {
             })?,
             end: end.try_into().map_err(|_| Error {
                 layer: ErrorLayer::Composition,
-                path: Path::new(),
+                path: positions[1].path.clone(),
                 kind: ErrorKind::Value {
                     expected: "non-negative extent".into(),
                     value: end.to_string(),

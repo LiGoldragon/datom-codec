@@ -98,6 +98,38 @@ fn protos_symbol_and_reader_budget_are_datom_intrinsics() {
 }
 
 #[test]
+fn extent_conversion_refusals_name_the_offending_position() {
+    for (text, path, extent) in [
+        (
+            "Extent.{ -1 2 }",
+            vec![1, 0],
+            protos::Extent { start: 9, end: 11 },
+        ),
+        (
+            "Extent.{ 1 -2 }",
+            vec![1, 1],
+            protos::Extent { start: 11, end: 13 },
+        ),
+    ] {
+        let mut potential = Potential::<protos::Extent>::from(text);
+        let error = potential
+            .actualize(&mut Budget {
+                remaining: 8,
+                reader: ReaderBudget { remaining: 128 },
+                depth: 0,
+                maximum_depth: 4_096,
+            })
+            .unwrap_err();
+        assert_eq!(error.path, path);
+        assert_eq!(potential.reader_extent(&error.path), Some(extent));
+        assert!(matches!(
+            error.kind,
+            ErrorKind::Value { ref expected, .. } if expected == "non-negative extent"
+        ));
+    }
+}
+
+#[test]
 fn scalar_refusal_keeps_the_datom_path() {
     let datom = Datom {
         path: vec![2],
