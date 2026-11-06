@@ -9,7 +9,8 @@ pub trait Positional {}
 pub trait DatomForming {
     fn datom_form<N: Branchable>(
         &self,
-        input: N,
+        input_0: N,
+        input_1: i64,
     ) -> std::result::Result<crate::Datom, crate::Error>;
 }
 #[rustfmt::skip]

@@ -1,7 +1,7 @@
 use datom_codec::{
-    Actualizing, Budget, Composable, Composing, Datom, DatomForming, Datomizable, Decimal, Error,
-    ErrorKind, ErrorLayer, ErrorRaising, Form, Meaning, Path, Potential, PotentialExtenting,
-    ProtosExtenting, Scalar,
+    Actualizing, Budget, CanonicalIntegerReadable, Composable, Composing, Datom, DatomForming,
+    Datomizable, Decimal, Error, ErrorKind, ErrorLayer, ErrorRaising, Form, IntegerDecodeError,
+    Meaning, Path, Potential, PotentialExtenting, ProtosExtenting, Scalar,
 };
 use protos::{BuildsReaderBudget, Protosizable, ReaderBudget, Textualizable};
 
@@ -97,6 +97,105 @@ fn protos_symbol_and_reader_budget_are_datom_intrinsics() {
     let datom = reader.datomize(vec![]);
     let rebuilt: ReaderBudget = datom.compose(&mut budget).unwrap();
     assert_eq!(rebuilt, reader);
+}
+
+fn composition_budget() -> Budget {
+    Budget {
+        remaining: 64,
+        reader: ReaderBudget::from_native_limits(128, 64).expect("fixture reader budget"),
+        depth: 0,
+        maximum_depth: 64,
+        forming_maximum_depth: 64,
+    }
+}
+
+fn bare(at: i64, value: &str) -> Datom {
+    Datom {
+        path: vec![at],
+        form: Form::Bare(value.into()),
+    }
+}
+
+#[test]
+fn reader_budget_requires_the_exact_ordered_pair_and_attributes_each_refusal() {
+    let scalar = bare(7, "9");
+    let scalar_error = scalar
+        .compose::<ReaderBudget>(&mut composition_budget())
+        .expect_err("a scalar is not a ReaderBudget");
+    assert_eq!(scalar_error.path, vec![7]);
+    assert!(matches!(scalar_error.kind, ErrorKind::Form { .. }));
+
+    for arity in [1, 3] {
+        let datom = Datom {
+            path: vec![],
+            form: Form::Struct((0..arity).map(|index| bare(index, "1")).collect::<Vec<_>>()),
+        };
+        let error = datom
+            .compose::<ReaderBudget>(&mut composition_budget())
+            .expect_err("ReaderBudget has exactly two positions");
+        assert!(matches!(error.kind, ErrorKind::Arity { expected: 2, .. }));
+    }
+
+    for (first, second, path) in [("-1", "2", vec![0]), ("2", "-1", vec![1])] {
+        let datom = Datom {
+            path: vec![],
+            form: Form::Struct(vec![bare(0, first), bare(1, second)]),
+        };
+        let error = datom
+            .compose::<ReaderBudget>(&mut composition_budget())
+            .expect_err("negative ReaderBudget field refuses");
+        assert_eq!(error.path, path);
+        assert!(matches!(error.kind, ErrorKind::Value { .. }));
+    }
+
+    let exhausted = Datom {
+        path: vec![],
+        form: Form::Struct(vec![bare(0, "0"), bare(1, "0")]),
+    }
+    .compose::<ReaderBudget>(&mut composition_budget())
+    .expect("zero is a valid exhausted runtime budget");
+    use protos::ReadsReaderBudget;
+    assert_eq!(exhausted.remaining(), 0);
+    assert_eq!(exhausted.maximum_depth(), 0);
+
+    let maximum = i64::MAX.to_string();
+    let datom = Datom {
+        path: vec![],
+        form: Form::Struct(vec![bare(0, &maximum), bare(1, &maximum)]),
+    };
+    #[cfg(target_pointer_width = "64")]
+    {
+        let rebuilt = datom
+            .compose::<ReaderBudget>(&mut composition_budget())
+            .expect("the largest ordered pair representable by both contracts composes");
+        assert_eq!(rebuilt.remaining(), i64::MAX);
+        assert_eq!(rebuilt.maximum_depth(), i64::MAX);
+    }
+    #[cfg(target_pointer_width = "32")]
+    {
+        let error = datom
+            .compose::<ReaderBudget>(&mut composition_budget())
+            .expect_err("the integer pair exceeds this target's native width");
+        assert_eq!(error.path, vec![0]);
+        assert!(matches!(error.kind, ErrorKind::Value { .. }));
+    }
+}
+
+#[test]
+fn canonical_integer_reports_negative_noncanonical_overflow_and_invalid_text() {
+    assert_eq!("-1".canonical_integer().unwrap(), -1);
+    assert!(matches!(
+        "-0".canonical_integer(),
+        Err(IntegerDecodeError::NonCanonical)
+    ));
+    assert!(matches!(
+        "9223372036854775808".canonical_integer(),
+        Err(IntegerDecodeError::Invalid(_))
+    ));
+    assert!(matches!(
+        "native-error".canonical_integer(),
+        Err(IntegerDecodeError::Invalid(_))
+    ));
 }
 
 #[test]
@@ -589,6 +688,25 @@ fn forming_depth_is_independent_from_reader_and_composition_budgets() {
         .expect_err("forming depth is enforced before composition");
     assert_eq!(error.layer, ErrorLayer::Datom);
     assert_eq!(error.kind, ErrorKind::Budget);
+}
+
+#[test]
+fn forming_depth_accepts_the_exact_boundary_and_refuses_one_less() {
+    let source = "{ Ada }";
+    let actual = |forming_maximum_depth| {
+        Potential::<Wrapper<String>>::from(source).actualize(&mut Budget {
+            remaining: 64,
+            reader: ReaderBudget::from_native_limits(64, 64).expect("fixture reader budget"),
+            depth: 0,
+            maximum_depth: 64,
+            forming_maximum_depth,
+        })
+    };
+    let error = actual(1).expect_err("the child lies one level past the allowance");
+    assert_eq!(error.layer, ErrorLayer::Datom);
+    assert_eq!(error.path, vec![0]);
+    assert_eq!(error.kind, ErrorKind::Budget);
+    assert!(actual(2).is_ok(), "the exact two-level boundary forms");
 }
 
 #[test]
