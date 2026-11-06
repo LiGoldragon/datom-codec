@@ -3,10 +3,28 @@ use std::str::FromStr;
 use crate::*;
 
 pub trait DatomForming {
-    fn datom_form(&self, path: Path) -> Result<Datom, Error>;
+    fn datom_form(&self, path: Path, maximum_depth: Integer) -> Result<Datom, Error>;
 }
 
-const MAXIMUM_FORMING_DEPTH: Integer = 4_096;
+#[derive(Debug)]
+pub enum IntegerDecodeError {
+    NonCanonical,
+    Invalid(std::num::ParseIntError),
+}
+pub trait CanonicalIntegerReadable {
+    fn canonical_integer(&self) -> Result<Integer, IntegerDecodeError>;
+}
+impl CanonicalIntegerReadable for str {
+    fn canonical_integer(&self) -> Result<Integer, IntegerDecodeError> {
+        if self.starts_with('+')
+            || self.starts_with("-0")
+            || (self.len() > 1 && self.starts_with('0'))
+        {
+            return Err(IntegerDecodeError::NonCanonical);
+        }
+        Integer::from_str(self).map_err(IntegerDecodeError::Invalid)
+    }
+}
 
 enum Forming<'a> {
     Visit(&'a protos::Protos, Path, Integer),
@@ -18,10 +36,10 @@ struct Former<'a> {
     values: Vec<Datom>,
 }
 trait FormingDatoms<'a> {
-    fn form(root: &'a protos::Protos, path: Path) -> Result<Datom, Error>;
+    fn form(root: &'a protos::Protos, path: Path, maximum_depth: Integer) -> Result<Datom, Error>;
 }
 impl<'a> FormingDatoms<'a> for Former<'a> {
-    fn form(root: &'a protos::Protos, path: Path) -> Result<Datom, Error> {
+    fn form(root: &'a protos::Protos, path: Path, maximum_depth: Integer) -> Result<Datom, Error> {
         let mut former = Self {
             work: vec![Forming::Visit(root, path, 0)],
             values: Vec::new(),
@@ -29,7 +47,7 @@ impl<'a> FormingDatoms<'a> for Former<'a> {
         while let Some(work) = former.work.pop() {
             match work {
                 Forming::Visit(protos, path, depth) => {
-                    if depth >= MAXIMUM_FORMING_DEPTH {
+                    if depth >= maximum_depth {
                         return Err(Error {
                             layer: ErrorLayer::Datom,
                             path,
@@ -157,8 +175,8 @@ impl<'a> FormingDatoms<'a> for Former<'a> {
     }
 }
 impl DatomForming for protos::Protos {
-    fn datom_form(&self, path: Path) -> Result<Datom, Error> {
-        Former::form(self, path)
+    fn datom_form(&self, path: Path, maximum_depth: Integer) -> Result<Datom, Error> {
+        Former::form(self, path, maximum_depth)
     }
 }
 
@@ -563,21 +581,55 @@ impl Composing for protos::Symbol {
 
 impl Datomizable for protos::ReaderBudget {
     fn datomize(&self, at: Path) -> Datom {
-        (self.remaining as Integer).datomize(at)
+        use protos::ReadsReaderBudget;
+        Datom {
+            path: at.clone(),
+            form: Form::Struct(vec![
+                self.remaining().datomize(at.child(0)),
+                self.maximum_depth().datomize(at.child(1)),
+            ]),
+        }
     }
 }
 impl Composing for protos::ReaderBudget {
     fn compose(datom: &Datom, budget: &mut Budget) -> Result<Self, Error> {
-        let remaining: Integer = datom.compose(budget)?;
-        Ok(Self {
-            remaining: remaining.try_into().map_err(|_| Error {
+        use protos::BuildsReaderBudget;
+        budget.spend(&datom.path)?;
+        let Form::Struct(children) = &datom.form else {
+            return Err(Error {
                 layer: ErrorLayer::Composition,
                 path: datom.path.clone(),
-                kind: ErrorKind::Value {
-                    expected: "non-negative reader budget".into(),
-                    value: remaining.to_string(),
+                kind: ErrorKind::Form {
+                    expected: "ReaderBudget".into(),
+                    found: datom.form.form_name().into(),
                 },
-            })?,
+            });
+        };
+        if children.len() != 2 {
+            return Err(Error {
+                layer: ErrorLayer::Composition,
+                path: datom.path.clone(),
+                kind: ErrorKind::Arity {
+                    expected: 2,
+                    found: Integer::try_from(children.len()).unwrap_or(Integer::MAX),
+                },
+            });
+        }
+        let remaining = children[0].compose(budget)?;
+        let maximum_depth = children[1].compose(budget)?;
+        Self::from_integer_limits(remaining, maximum_depth).map_err(|failure| {
+            let (index, value) = match failure.field {
+                protos::ReaderBudgetField::Remaining => (0, remaining),
+                protos::ReaderBudgetField::MaximumDepth => (1, maximum_depth),
+            };
+            Error {
+                layer: ErrorLayer::Composition,
+                path: datom.path.child(index),
+                kind: ErrorKind::Value {
+                    expected: format!("ReaderBudget.{:?}", failure.reason),
+                    value: value.to_string(),
+                },
+            }
         })
     }
 }
@@ -738,20 +790,7 @@ impl Scalar for i64 {
                 });
             }
         };
-        if value.starts_with('+')
-            || value.starts_with("-0")
-            || (value.len() > 1 && value.starts_with('0'))
-        {
-            return Err(Error {
-                layer: ErrorLayer::Composition,
-                path: datom.path.clone(),
-                kind: ErrorKind::Value {
-                    expected: "Integer".into(),
-                    value: value.clone(),
-                },
-            });
-        }
-        i64::from_str(value).map_err(|_| Error {
+        value.canonical_integer().map_err(|_| Error {
             layer: ErrorLayer::Composition,
             path: datom.path.clone(),
             kind: ErrorKind::Value {

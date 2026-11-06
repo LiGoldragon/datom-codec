@@ -3,7 +3,7 @@ use datom_codec::{
     ErrorKind, ErrorLayer, ErrorRaising, Form, Meaning, Path, Potential, PotentialExtenting,
     ProtosExtenting, Scalar,
 };
-use protos::{Protosizable, ReaderBudget, Textualizable};
+use protos::{BuildsReaderBudget, Protosizable, ReaderBudget, Textualizable};
 
 #[derive(Debug, PartialEq, Composing, Datomizable)]
 struct Score {
@@ -62,9 +62,10 @@ fn derived_struct_composes_its_typed_positions() {
     let value: Score = datom
         .compose(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(
@@ -82,16 +83,17 @@ fn derived_struct_composes_its_typed_positions() {
 fn protos_symbol_and_reader_budget_are_datom_intrinsics() {
     let mut budget = Budget {
         remaining: 20,
-        reader: ReaderBudget { remaining: 128 },
+        reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
         depth: 0,
         maximum_depth: 128,
+        forming_maximum_depth: 4_096,
     };
     let symbol = protos::Symbol("Reviewer".into());
     let datom = symbol.datomize(vec![]);
     let rebuilt: protos::Symbol = datom.compose(&mut budget.clone()).unwrap();
     assert_eq!(rebuilt, symbol);
 
-    let reader = ReaderBudget { remaining: 4_096 };
+    let reader = ReaderBudget::from_native_limits(4_096, 256).expect("fixture reader budget");
     let datom = reader.datomize(vec![]);
     let rebuilt: ReaderBudget = datom.compose(&mut budget).unwrap();
     assert_eq!(rebuilt, reader);
@@ -107,9 +109,10 @@ fn scalar_refusal_keeps_the_datom_path() {
         &datom,
         &mut Budget {
             remaining: 1,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         },
     )
     .unwrap_err();
@@ -125,9 +128,10 @@ fn derived_variants_use_their_rust_names_as_heads() {
         datom
             .compose::<Reply>(&mut Budget {
                 remaining: 10,
-                reader: ReaderBudget { remaining: 10 },
+                reader: ReaderBudget::from_native_limits(10, 256).expect("fixture reader budget"),
                 depth: 0,
-                maximum_depth: 4_096
+                maximum_depth: 4_096,
+                forming_maximum_depth: 4_096,
             })
             .unwrap(),
         value
@@ -137,9 +141,10 @@ fn derived_variants_use_their_rust_names_as_heads() {
         pending
             .compose::<Reply>(&mut Budget {
                 remaining: 10,
-                reader: ReaderBudget { remaining: 10 },
+                reader: ReaderBudget::from_native_limits(10, 256).expect("fixture reader budget"),
                 depth: 0,
-                maximum_depth: 4_096
+                maximum_depth: 4_096,
+                forming_maximum_depth: 4_096,
             })
             .unwrap(),
         Reply::Pending
@@ -149,9 +154,10 @@ fn derived_variants_use_their_rust_names_as_heads() {
         Potential::<Reply>::from("Pending")
             .actualize(&mut Budget {
                 remaining: 1,
-                reader: ReaderBudget { remaining: 128 },
+                reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
                 depth: 0,
-                maximum_depth: 4_096
+                maximum_depth: 4_096,
+                forming_maximum_depth: 4_096,
             })
             .unwrap(),
         Reply::Pending
@@ -180,9 +186,10 @@ fn scalar_writers_preserve_their_textual_kind() {
             },
             &mut Budget {
                 remaining: 1,
-                reader: ReaderBudget { remaining: 1 },
+                reader: ReaderBudget::from_native_limits(1, 256).expect("fixture reader budget"),
                 depth: 0,
-                maximum_depth: 4_096
+                maximum_depth: 4_096,
+                forming_maximum_depth: 4_096,
             }
         )
         .is_err()
@@ -195,9 +202,10 @@ fn qualified_heads_refuse_at_the_variant_path() {
     let error = potential
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(error.path, Vec::<i64>::new());
@@ -223,7 +231,7 @@ fn protos_conversion_preserves_datoms_and_canonical_text() {
     let text = datom.protosize().textualize();
     assert_eq!(text, "{ Ada 42 True }");
     assert_eq!(datom.protosize(), text.protosize().unwrap());
-    let rebuilt = text.protosize().unwrap().datom_form(vec![]);
+    let rebuilt = text.protosize().unwrap().datom_form(vec![], 4_096);
     assert_eq!(rebuilt.unwrap(), datom);
 }
 
@@ -232,9 +240,10 @@ fn potential_actualizes_text_through_protos_and_datom() {
     let value: Score = Potential::from("{ Ada 42 True }")
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 10 },
+            reader: ReaderBudget::from_native_limits(10, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(
@@ -253,18 +262,20 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
     let timestamp: String = Potential::from("2026-09-03T17:46:20")
         .actualize(&mut Budget {
             remaining: 1,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(timestamp, "2026-09-03T17:46:20");
     let name: String = Potential::from("Ada:one")
         .actualize(&mut Budget {
             remaining: 1,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(name, "Ada:one");
@@ -272,36 +283,40 @@ fn scalar_positions_keep_bare_payloads_and_some_bodies_flat() {
     let string: Option<String> = Potential::from("Some.42")
         .actualize(&mut Budget {
             remaining: 2,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(string, Some("42".into()));
     let integer: Option<i64> = Potential::from("Some.42")
         .actualize(&mut Budget {
             remaining: 2,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(integer, Some(42));
     let decimal: Decimal = Potential::from("3.14")
         .actualize(&mut Budget {
             remaining: 2,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(decimal, three_point_fourteen);
     let optional_decimal: Option<Decimal> = Potential::from("Some.3.14")
         .actualize(&mut Budget {
             remaining: 3,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(optional_decimal, Some(three_point_fourteen));
@@ -330,9 +345,10 @@ fn option_string_with_protos_separators_round_trips() {
     let decoded: Option<String> = Potential::from(rendered.as_str())
         .actualize(&mut Budget {
             remaining: 2,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .expect("delimited separator string decodes");
     assert_eq!(decoded, value);
@@ -349,9 +365,10 @@ fn typed_string_positions_resolve_bare_syntax_characters() {
     let value: PunctuatedStrings = Potential::from(text)
         .actualize(&mut Budget {
             remaining: 16,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 16,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(value, expected);
@@ -385,9 +402,10 @@ fn string_rule_round_trips_bare_punctuation_and_delimited_content() {
         let rebuilt: String = Potential::from(text)
             .actualize(&mut Budget {
                 remaining: 64,
-                reader: ReaderBudget { remaining: 256 },
+                reader: ReaderBudget::from_native_limits(256, 256).expect("fixture reader budget"),
                 depth: 0,
                 maximum_depth: 64,
+                forming_maximum_depth: 4_096,
             })
             .unwrap();
         assert_eq!(rebuilt, value, "String round trip for {canonical:?}");
@@ -406,9 +424,10 @@ fn typed_enums_keep_bare_carried_and_daisy_variants() {
         let value: Message = Potential::from(text)
             .actualize(&mut Budget {
                 remaining: 16,
-                reader: ReaderBudget { remaining: 128 },
+                reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
                 depth: 0,
                 maximum_depth: 16,
+                forming_maximum_depth: 4_096,
             })
             .unwrap();
         assert_eq!(value, expected);
@@ -421,9 +440,10 @@ fn delimited_variant_shapes_do_not_compose_as_strings() {
     let error = Potential::<String>::from("Head.{ x }")
         .actualize(&mut Budget {
             remaining: 8,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 8,
+            forming_maximum_depth: 4_096,
         })
         .unwrap_err();
     assert!(matches!(
@@ -458,9 +478,10 @@ fn dotted_string_composition_obeys_depth_and_work_budgets() {
     };
     let mut depth_budget = Budget {
         remaining: 16,
-        reader: ReaderBudget { remaining: 16 },
+        reader: ReaderBudget::from_native_limits(16, 256).expect("fixture reader budget"),
         depth: 0,
         maximum_depth: 3,
+        forming_maximum_depth: 4_096,
     };
     let error = dotted.compose::<String>(&mut depth_budget).unwrap_err();
     assert_eq!(error.kind, ErrorKind::Budget);
@@ -468,9 +489,10 @@ fn dotted_string_composition_obeys_depth_and_work_budgets() {
 
     let mut work_budget = Budget {
         remaining: 2,
-        reader: ReaderBudget { remaining: 16 },
+        reader: ReaderBudget::from_native_limits(16, 256).expect("fixture reader budget"),
         depth: 0,
         maximum_depth: 16,
+        forming_maximum_depth: 4_096,
     };
     let error = dotted.compose::<String>(&mut work_budget).unwrap_err();
     assert_eq!(error.kind, ErrorKind::Budget);
@@ -490,9 +512,10 @@ fn generic_containers_and_meaning_round_trip_their_forms() {
     let rebuilt: Wrapper<Option<Box<Meaning>>> = datom
         .compose(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 10 },
+            reader: ReaderBudget::from_native_limits(10, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(rebuilt, value);
@@ -502,9 +525,10 @@ fn generic_containers_and_meaning_round_trip_their_forms() {
         datom
             .compose::<Result<i64, String>>(&mut Budget {
                 remaining: 10,
-                reader: ReaderBudget { remaining: 10 },
+                reader: ReaderBudget::from_native_limits(10, 256).expect("fixture reader budget"),
                 depth: 0,
-                maximum_depth: 4_096
+                maximum_depth: 4_096,
+                forming_maximum_depth: 4_096,
             })
             .unwrap(),
         result
@@ -516,9 +540,10 @@ fn potential_reports_structural_and_budget_errors_at_their_context() {
     let structural = Potential::<Score>::from("{ Ada")
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(structural.path, Vec::<i64>::new());
@@ -526,9 +551,10 @@ fn potential_reports_structural_and_budget_errors_at_their_context() {
     let exhausted = Potential::<Score>::from("{ Ada 42 True }")
         .actualize(&mut Budget {
             remaining: 0,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(exhausted.path, Vec::<i64>::new());
@@ -540,13 +566,29 @@ fn potential_refuses_before_composition_when_reader_budget_is_exhausted() {
     let error = Potential::<String>::from("Ada")
         .actualize(&mut Budget {
             remaining: 1,
-            reader: ReaderBudget { remaining: 0 },
+            reader: ReaderBudget::from_native_limits(0, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(error.path, Vec::<i64>::new());
     assert!(matches!(error.kind, ErrorKind::Structural(_)));
+}
+
+#[test]
+fn forming_depth_is_independent_from_reader_and_composition_budgets() {
+    let error = Potential::<String>::from("Ada")
+        .actualize(&mut Budget {
+            remaining: 64,
+            reader: ReaderBudget::from_native_limits(64, 64).expect("fixture reader budget"),
+            depth: 0,
+            maximum_depth: 64,
+            forming_maximum_depth: 0,
+        })
+        .expect_err("forming depth is enforced before composition");
+    assert_eq!(error.layer, ErrorLayer::Datom);
+    assert_eq!(error.kind, ErrorKind::Budget);
 }
 
 #[test]
@@ -557,9 +599,10 @@ fn unit_options_and_unit_enums_round_trip_as_bare_text() {
         Potential::<Option<i64>>::from("None")
             .actualize(&mut Budget {
                 remaining: 1,
-                reader: ReaderBudget { remaining: 128 },
+                reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
                 depth: 0,
-                maximum_depth: 4_096
+                maximum_depth: 4_096,
+                forming_maximum_depth: 4_096,
             })
             .unwrap(),
         None
@@ -568,9 +611,10 @@ fn unit_options_and_unit_enums_round_trip_as_bare_text() {
         Potential::<Reply>::from("Pending")
             .actualize(&mut Budget {
                 remaining: 1,
-                reader: ReaderBudget { remaining: 128 },
+                reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
                 depth: 0,
-                maximum_depth: 4_096
+                maximum_depth: 4_096,
+                forming_maximum_depth: 4_096,
             })
             .unwrap(),
         Reply::Pending
@@ -582,9 +626,10 @@ fn datom_refuses_non_datom_structural_forms() {
     let angled = Potential::<Vec<i64>>::from("< 1 2 >")
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap_err();
     assert!(matches!(
@@ -596,9 +641,10 @@ fn datom_refuses_non_datom_structural_forms() {
     let positions = Potential::<Pair>::from("Values.[ 1 2 ]")
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap_err();
     assert!(matches!(
@@ -617,9 +663,11 @@ fn strings_quote_delimiters_keep_bare_separators_and_refuse_meaning_text() {
             Potential::<String>::from(text)
                 .actualize(&mut Budget {
                     remaining: 1,
-                    reader: ReaderBudget { remaining: 128 },
+                    reader: ReaderBudget::from_native_limits(128, 256)
+                        .expect("fixture reader budget"),
                     depth: 0,
-                    maximum_depth: 4_096
+                    maximum_depth: 4_096,
+                    forming_maximum_depth: 4_096,
                 })
                 .unwrap(),
             value
@@ -632,9 +680,11 @@ fn strings_quote_delimiters_keep_bare_separators_and_refuse_meaning_text() {
             Potential::<String>::from(text)
                 .actualize(&mut Budget {
                     remaining: 8,
-                    reader: ReaderBudget { remaining: 128 },
+                    reader: ReaderBudget::from_native_limits(128, 256)
+                        .expect("fixture reader budget"),
                     depth: 0,
                     maximum_depth: 8,
+                    forming_maximum_depth: 4_096,
                 })
                 .unwrap(),
             value
@@ -643,9 +693,10 @@ fn strings_quote_delimiters_keep_bare_separators_and_refuse_meaning_text() {
     let error = Potential::<String>::from("(a meaning)")
         .actualize(&mut Budget {
             remaining: 1,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(
@@ -663,9 +714,10 @@ fn retained_reader_finds_nested_composition_fault_extents() {
     let error = vector
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(error.path, vec![1]);
@@ -678,9 +730,10 @@ fn retained_reader_finds_nested_composition_fault_extents() {
     let error = variant
         .actualize(&mut Budget {
             remaining: 10,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(error.path, vec![1, 1]);
@@ -701,9 +754,10 @@ fn typed_protos_errors_round_trip_without_a_reader_tree() {
     let rebuilt: protos::Error = Potential::from(text)
         .actualize(&mut Budget {
             remaining: 20,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(rebuilt, error);
@@ -721,9 +775,10 @@ enum GenericReply<T> {
 fn generic_enum_derives_bound_every_payload_shape() {
     let budget = || Budget {
         remaining: 50,
-        reader: ReaderBudget { remaining: 128 },
+        reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
         depth: 0,
         maximum_depth: 4_096,
+        forming_maximum_depth: 4_096,
     };
     for value in [
         GenericReply::Pending,
@@ -754,9 +809,10 @@ fn datom_errors_round_trip_with_their_raising_layer() {
     let rebuilt: Error = Potential::from(text)
         .actualize(&mut Budget {
             remaining: 30,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 4_096,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(rebuilt, error);
@@ -795,11 +851,11 @@ fn composition_depth_is_bounded_independently_from_node_budget() {
     let error = datom
         .compose::<Recursive>(&mut Budget {
             remaining: 1_000_000,
-            reader: ReaderBudget {
-                remaining: 1_000_000,
-            },
+            reader: ReaderBudget::from_native_limits(1_000_000, 256)
+                .expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 32,
+            forming_maximum_depth: 4_096,
         })
         .unwrap_err();
     assert_eq!(error.kind, ErrorKind::Budget);
@@ -882,9 +938,10 @@ fn recursive_struct_derives_without_a_self_bound_cycle() {
     let rebuilt: Chain = datom
         .compose(&mut Budget {
             remaining: 100,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 128,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(rebuilt, value);
@@ -900,9 +957,10 @@ fn recursive_struct_derives_without_a_self_bound_cycle() {
     let rebuilt: GenericChain<i64> = datom
         .compose(&mut Budget {
             remaining: 100,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 128,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(rebuilt, generic);
@@ -915,9 +973,10 @@ fn recursive_generic_enum_derives_without_a_self_bound_cycle() {
     let rebuilt: RecursiveNode<i64> = datom
         .compose(&mut Budget {
             remaining: 100,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 128,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(rebuilt, value);
@@ -948,9 +1007,10 @@ fn exact_self_detection_bounds_similarly_named_wrappers_without_cycles() {
     let rebuilt: Node<i64> = datom
         .compose(&mut Budget {
             remaining: 100,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 128,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(rebuilt, value);
@@ -959,9 +1019,10 @@ fn exact_self_detection_bounds_similarly_named_wrappers_without_cycles() {
     let rebuilt: MutualA<i64> = datom
         .compose(&mut Budget {
             remaining: 100,
-            reader: ReaderBudget { remaining: 128 },
+            reader: ReaderBudget::from_native_limits(128, 256).expect("fixture reader budget"),
             depth: 0,
             maximum_depth: 128,
+            forming_maximum_depth: 4_096,
         })
         .unwrap();
     assert_eq!(rebuilt, mutual);
@@ -986,7 +1047,7 @@ fn manually_built_hundred_thousand_deep_protos_refuses_or_forms_without_recursio
         };
     }
     let error = protos
-        .datom_form(vec![])
+        .datom_form(vec![], 4_096)
         .expect_err("manual headed tree reaches the typed depth refusal");
     assert_eq!(error.kind, ErrorKind::Budget);
     drop(protos);

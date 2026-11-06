@@ -16,7 +16,9 @@ mod dropping;
 mod positional;
 mod projection;
 
-pub use composition::{DatomForming, Meaning, Scalar, Variantizing};
+pub use composition::{
+    CanonicalIntegerReadable, DatomForming, IntegerDecodeError, Meaning, Scalar, Variantizing,
+};
 pub use core::{
     Actualizing, Branchable, Budget, Budgeted, Composable, Composing, CompositionDepthing,
     Compositional, Datom, DatomPositioning, Datomizable, Error, ErrorKind, ErrorLayer,

@@ -5,14 +5,15 @@ use datom_codec::{
     Actualizing, Branchable, Budget, Composable, Composing, Compositional, Datom, Datomizable,
     Decimal, Error, ErrorKind, ErrorLayer, Form, Path, Potential,
 };
-use protos::{Protosizable, ReaderBudget, Textualizable};
+use protos::{BuildsReaderBudget, Protosizable, ReaderBudget, Textualizable};
 
 fn budget(remaining: i64) -> Budget {
     Budget {
         remaining,
-        reader: ReaderBudget { remaining: 4_096 },
+        reader: ReaderBudget::from_native_limits(4_096, 256).expect("fixture reader budget"),
         depth: 0,
         maximum_depth: 4_096,
+        forming_maximum_depth: 4_096,
     }
 }
 

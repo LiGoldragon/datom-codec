@@ -9,7 +9,7 @@ Library
 [ Branchable.[]
   Budgeted.[]
   Positional.[]
-  DatomForming.[ datom_form.{ [ Branchable ]
+  DatomForming.[ datom_form.{ [ Branchable Integer ]
                               [ Result<Datom Error> ] } ]
   Datomizable.[ datomize.{ [ Branchable ]
                            [ Datom ] } ]

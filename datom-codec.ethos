@@ -17,6 +17,6 @@ Library
          Bare.String
          String.String
          Meaning.Opaque ]
-  Budget.{ Integer ReaderBudget Integer Integer } ]
+  Budget.{ Integer ReaderBudget Integer Integer Integer } ]
 []
 []

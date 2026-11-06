@@ -5,7 +5,7 @@
 #![allow(dead_code)]
 
 use datom_codec::{Actualizing, Budget, Composing, Datomizable, Path, Potential};
-use protos::{Protosizable, ReaderBudget, Textualizable};
+use protos::{BuildsReaderBudget, Protosizable, ReaderBudget, Textualizable};
 
 pub struct Box {
     pub integer: i64,
@@ -42,9 +42,10 @@ struct Holder {
 fn budget() -> Budget {
     Budget {
         remaining: 4_096,
-        reader: ReaderBudget { remaining: 4_096 },
+        reader: ReaderBudget::from_native_limits(4_096, 256).expect("fixture reader budget"),
         depth: 0,
         maximum_depth: 4_096,
+        forming_maximum_depth: 4_096,
     }
 }
 

@@ -27,6 +27,7 @@ pub struct Budget {
     pub reader: protos::ReaderBudget,
     pub depth: Integer,
     pub maximum_depth: Integer,
+    pub forming_maximum_depth: Integer,
 }
 
 /// What composing spends from, a step at a time, each step at a path.
@@ -468,7 +469,8 @@ impl<T: Composing> Actualizing<T> for Potential<T> {
                 kind: ErrorKind::Structural(error),
             })?;
         self.reader = Some(protos.clone());
-        let datom = crate::DatomForming::datom_form(&protos, Path::new())?;
+        let datom =
+            crate::DatomForming::datom_form(&protos, Path::new(), budget.forming_maximum_depth)?;
         datom.compose(budget)
     }
 }
