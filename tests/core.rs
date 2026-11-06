@@ -480,7 +480,7 @@ fn string_rule_round_trips_bare_punctuation_and_delimited_content() {
         ("a;b", "«a;b»"),
         ("{x}", "«{x}»"),
         ("(x)", "«(x)»"),
-        ("«x»", "««x\\»»"),
+        ("«x»", "««x»»"),
     ] {
         let text = value.to_owned().datomize(vec![]).protosize().textualize();
         assert_eq!(text, canonical, "canonical String for {value:?}");

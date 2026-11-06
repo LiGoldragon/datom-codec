@@ -1,5 +1,17 @@
 # Upgrades
 
+## 0.33.0
+
+Breaking.
+
+- protos 0.33.0: a bare unbalanced `«` inside a guillemet string, or a
+  literal `\«`, now reads differently. A consumer holding datom text with
+  either form re-reads it and updates the expectation.
+
+To deploy: repin datom-codec (and protos to the same revision it pins,
+3c7ade3), run the consumer's tests, and update any expected text that holds
+an unbalanced `«` or a literal `\«`.
+
 ## 0.32.0
 
 Breaking.
