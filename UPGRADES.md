@@ -2,8 +2,8 @@
 
 ## 0.33.1
 
-Not breaking for any valid use: no text form, feature, archived layout or valid-value change, and
-one narrow trait-implementation change, recorded here: `ArchivedDecimal`'s `rkyv::Deserialize<Decimal, D>`
+No text form, feature, archived layout or valid-value change, and one narrow
+trait-implementation change that can break source compatibility for a custom deserializer, recorded here: `ArchivedDecimal`'s `rkyv::Deserialize<Decimal, D>`
 impl was derived and generic over any `D: rancor::Fallible + ?Sized`; it is now written by hand and also
 requires `D::Error: rancor::Source`. `rancor::Error`, `rancor::Failure` and `rancor::BoxedError` satisfy it (tests/decimal_archive.rs deserializes a `Decimal` through each); a hand-written
 deserializer whose error is not a `Source` no longer type-checks against `Decimal`.
