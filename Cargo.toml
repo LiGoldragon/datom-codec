@@ -1,6 +1,6 @@
 [package]
 name        = "datom-codec"
-version     = "0.33.0"
+version     = "0.33.1"
 edition     = "2024"
 rust-version = "1.85"
 license     = "MIT OR Apache-2.0"
@@ -26,6 +26,11 @@ derive = { package = "datom-codec-derive", path = "crates/datom-codec-derive" }
 
 [dev-dependencies]
 proptest = "1.6"
+
+[[test]]
+name = "decimal_archive"
+path = "tests/decimal_archive.rs"
+required-features = ["rkyv"]
 
 [[test]]
 name = "archival"

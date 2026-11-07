@@ -27,20 +27,47 @@ use crate::*;
 /// The inner `f64` is private. [`Decimal::try_from`] is the only way in, and
 /// it refuses every value that has no datom text.
 ///
-/// One way in is not yet every way in. Under the `rkyv` feature the archived
-/// form is validated for its bit pattern and not for finiteness, so a peer's
-/// archive can still carry a non-finite decimal past the constructor. Closing
-/// that needs a `bytecheck::Verify` impl, which is an `unsafe trait` this
-/// crate's `unsafe_code = "forbid"` does not admit; the gap is named here
-/// rather than left for someone to find. It is no wider than the `f64` the
-/// generated contracts carried before this type existed, which no reader
-/// refused at all.
+/// Under the `rkyv` feature the archived form is validated for its bit pattern by rkyv, and
+/// reconstructing a `Decimal` from it goes through [`Decimal::try_from`], so a non-finite float in
+/// an archive is refused when the archive is read into a native value (directly or nested in any
+/// derived `Deserialize`) and a negative zero reads as zero. The borrowed `ArchivedDecimal` itself
+/// is still only structurally validated: code that reads the archived float without deserializing
+/// sees whatever bits the archive holds. The `Deserialize` is written by hand, safely and with
+/// `Archive` and `Serialize` still derived, so the archived layout is unchanged; a
+/// `bytecheck::Verify` impl would be an `unsafe trait`, which `unsafe_code = "forbid"` does not admit.
 #[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize))]
 pub struct Decimal(f64);
+
+/// The refusal of an archived float that is not a decimal. A local type, because the crate `Error`
+/// is not a `std::error::Error` and rkyv's `Source` takes only one.
+#[cfg(feature = "rkyv")]
+#[derive(Debug)]
+struct ArchivedNotADecimal(f64);
+
+#[cfg(feature = "rkyv")]
+impl fmt::Display for ArchivedNotADecimal {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "the archived float {} is not a decimal", self.0)
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl std::error::Error for ArchivedNotADecimal {}
+
+/// Reading an archived decimal re-enters the one constructor.
+#[cfg(feature = "rkyv")]
+impl<D> rkyv::Deserialize<Decimal, D> for ArchivedDecimal
+where
+    D: rkyv::rancor::Fallible + ?Sized,
+    D::Error: rkyv::rancor::Source,
+{
+    fn deserialize(&self, _deserializer: &mut D) -> Result<Decimal, D::Error> {
+        let float = self.0.to_native();
+        Decimal::try_from(float)
+            .map_err(|_| <D::Error as rkyv::rancor::Source>::new(ArchivedNotADecimal(float)))
+    }
+}
 
 /// A value that is not a decimal refuses in the crate's own vocabulary,
 /// naming the Decimal position it fails and the text it would have been.

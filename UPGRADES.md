@@ -1,5 +1,22 @@
 # Upgrades
 
+## 0.33.1
+
+Not breaking: no signature, text form, feature or archived layout changes.
+
+- Under the `rkyv` feature an archived `Decimal` is now read back through
+  `Decimal::try_from`: a non-finite float in an archive is refused when the archive is read into a
+  native value, directly or nested in any derived `Deserialize`, and a negative zero reads as zero.
+  Before, the derived `Deserialize` copied the float unchecked, so `rkyv::from_bytes` admitted NaN
+  and infinities. Valid archives read back as before and the bytes of every valid value are
+  unchanged (tests/decimal_archive.rs compares them with a raw `f64` archive).
+- Boundary kept: the borrowed `ArchivedDecimal` (reading the archived float without deserializing)
+  is still only structurally validated.
+- A consumer that read an archive holding a non-finite decimal now gets a `rancor` error where it
+  got a value; no valid archive changes.
+
+To deploy: repin datom-codec to this release; nothing else changes.
+
 ## 0.33.0
 
 Breaking.
