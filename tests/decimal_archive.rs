@@ -130,3 +130,35 @@ fn a_finite_container_restores_and_keeps_its_layout() {
 fn bytes_that_are_no_archive_are_still_refused() {
     assert!(rkyv::from_bytes::<Decimal, Error>(&[1, 2, 3]).is_err());
 }
+
+/// The strengthened bound `D::Error: rancor::Source` holds for the error types rkyv ships, so the
+/// standard deserialization entry points still accept `Decimal`.
+#[test]
+fn the_standard_rancor_errors_all_deserialize_a_decimal() {
+    use rkyv::rancor::{BoxedError, Failure};
+    let good = rkyv::to_bytes::<Error>(&decimal(3.2)).expect("archives");
+    let bad = raw_bytes(f64::NAN);
+
+    let archived = rkyv::access::<rkyv::Archived<Decimal>, Error>(&good).expect("valid bytes");
+    assert_eq!(
+        rkyv::deserialize::<Decimal, Error>(archived).ok(),
+        Some(decimal(3.2))
+    );
+    let archived = rkyv::access::<rkyv::Archived<Decimal>, Failure>(&good).expect("valid bytes");
+    assert_eq!(
+        rkyv::deserialize::<Decimal, Failure>(archived).ok(),
+        Some(decimal(3.2))
+    );
+    let archived = rkyv::access::<rkyv::Archived<Decimal>, BoxedError>(&good).expect("valid bytes");
+    assert_eq!(
+        rkyv::deserialize::<Decimal, BoxedError>(archived).ok(),
+        Some(decimal(3.2))
+    );
+
+    let archived = rkyv::access::<rkyv::Archived<Decimal>, Error>(&bad).expect("valid bits");
+    assert!(rkyv::deserialize::<Decimal, Error>(archived).is_err());
+    let archived = rkyv::access::<rkyv::Archived<Decimal>, Failure>(&bad).expect("valid bits");
+    assert!(rkyv::deserialize::<Decimal, Failure>(archived).is_err());
+    let archived = rkyv::access::<rkyv::Archived<Decimal>, BoxedError>(&bad).expect("valid bits");
+    assert!(rkyv::deserialize::<Decimal, BoxedError>(archived).is_err());
+}
