@@ -71,10 +71,6 @@
             rustfmt --check --edition ${manifest.package.edition} ${rust}/src/lib.rs ${rust}/tests/*.rs
             touch $out
           '';
-          doc = pkgs.runCommand "datom-codec-doc" { nativeBuildInputs = [ toolchain ]; } ''
-            rustdoc --edition ${manifest.package.edition} --crate-type lib --crate-name datom_codec \
-              -D warnings -o $out ${source}/lib.rs
-          '';
           # The test build compiled by clippy-driver under the crate's lints,
           # every target, warnings refused.
           clippy = tests.datom-codec.override {
