@@ -284,7 +284,7 @@ dependencies = [
 [[package]]
 name = "protos"
 version = "0.33.0"
-source = "git+https://github.com/LiGoldragon/protos?rev=3c7ade3#3c7ade34010cec6cec153ae694ee335f7fea0193"
+source = "git+https://github.com/LiGoldragon/protos?rev=4024614#4024614f1298bafcce7cb1bf1741005df6b0ef88"
 dependencies = [
  "rkyv",
 ]
