@@ -18,7 +18,7 @@
       memberChecks = { check, ... }: { datom-codec = check "datom-codec" [ "default" "rkyv" ]; };
 
       extraChecks =
-        { pkgs, toolchain, tests, ... }:
+        { pkgs, toolchain, tests, doc, ... }:
         let
           source = ./src;
           generator = ethos-zero.packages.${pkgs.stdenv.hostPlatform.system}.default;
@@ -71,6 +71,7 @@
             rustfmt --check --edition ${manifest.package.edition} ${rust}/src/lib.rs ${rust}/tests/*.rs
             touch $out
           '';
+          doc = doc "datom-codec" [ "default" "rkyv" ] [ "-D" "warnings" ];
           # The test build compiled by clippy-driver under the crate's lints,
           # every target, warnings refused.
           clippy = tests.datom-codec.override {
