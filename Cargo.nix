@@ -979,8 +979,8 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/LiGoldragon/protos";
-          rev = "4024614f1298bafcce7cb1bf1741005df6b0ef88";
-          sha256 = "1df1wpfhnx6vcipk3a29ky365kvk7zgk7kvardckz6da7rh36iln";
+          rev = "c93b598025984f8a73e70aa18b8e8a6fdfdfdfd8";
+          sha256 = "00rwpzkxqmwhmxr2dkv9ay9wfvjxbprvvv23lfxmqamm2264r2gb";
         };
         dependencies = [
           {
