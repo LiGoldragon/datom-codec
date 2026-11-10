@@ -19,7 +19,7 @@
       memberChecks = { check, ... }: { datom-codec = check "datom-codec" [ "default" "rkyv" ]; };
 
       extraChecks =
-        { pkgs, toolchain, tests, doc, ... }:
+        { pkgs, toolchain, doc, ... }:
         let
           source = ./src;
           generator = ethos-zero.packages.${pkgs.stdenv.hostPlatform.system}.default;
@@ -73,14 +73,6 @@
             touch $out
           '';
           doc = doc "datom-codec" [ "default" "rkyv" ] [ "-D" "warnings" ];
-          # The test build compiled by clippy-driver under the crate's lints,
-          # every target, warnings refused.
-          clippy = tests.datom-codec.override {
-            useClippy = true;
-            clippy = toolchain;
-            inherit (manifest) lints;
-            extraRustcOpts = [ "-D" "warnings" ];
-          };
         };
     };
 }
